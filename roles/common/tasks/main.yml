@@ -1,0 +1,114 @@
+---
+- name: Update packages
+  apt:
+    update_cache: yes
+    upgrade: dist
+    cache_valid_time: 3600
+
+- name: Install basic packages
+  apt:
+    name:
+      - ufw
+      - fail2ban
+      - auditd
+      - curl
+      - wget
+      - git
+      - python3-pip
+      - unzip
+      - jq
+      - net-tools
+      - tcpdump
+      - rsyslog
+    state: present
+
+- name: Set hostname #name needs to lure
+  hostname:
+    name: "{{ lure_hostname }}"
+
+- name: Update /etc/hosts
+  lineinfile:
+    path: /etc/hosts
+    regexp: '^127\.0\.1\.1'
+    line: "127.0.1.1 {{ lure_hostname }}"
+
+- name: Configure UFW – default deny
+  ufw:
+    state: enabled
+    policy: deny
+    direction: incoming
+
+- name: UFW – Allow in attacker ports
+  ufw:
+    rule: allow
+    port: "{{ item.port }}"
+    proto: "{{ item.proto | lower }}"
+    comment: "Honeypot: {{ item.name }}"
+  loop: "{{ honeypot_open_ports }}"
+
+- name: UFW – Allow administration only from admin-IP
+  ufw:
+    rule: allow
+    port: "{{ admin_ssh_port }}"
+    proto: tcp
+    src: "{{ admin_source_ip }}"
+    comment: "Admin SSH"
+
+- name: UFW – Allow outbound only to Sentinel (443)
+  ufw:
+    rule: allow
+    direction: out
+    port: "443"
+    proto: tcp
+    comment: "Sentinel outbound"
+
+- name: UFW – Allow DNS outbound
+  ufw:
+    rule: allow
+    direction: out
+    port: "53"
+    comment: "DNS"
+
+- name: UFW – Deny all other outbound traffic
+  ufw:
+    rule: deny
+    direction: out
+
+- name: Configure SSH to listen on admin port
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "^#?Port "
+    line: "Port {{ admin_ssh_port }}"
+  notify: Restart SSH
+
+- name: Remove root SSH login
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "^#?PermitRootLogin"
+    line: "PermitRootLogin no"
+  notify: Restart SSH
+
+- name: Configure auditd to monitor critical files
+  template:
+    src: audit.rules.j2
+    dest: /etc/audit/rules.d/honeypot.rules
+    mode: '0640'
+  notify: Restart auditd
+##
+# - name: Install Azure Monitor Agent
+#   shell: |
+#     wget -q https://raw.githubusercontent.com/Microsoft/OMS-Agent-for-Linux/master/installer/scripts/onboard_agent.sh
+#     bash onboard_agent.sh -w {{ log_analytics_workspace_id }} -s {{ log_analytics_workspace_key }}
+#   args:
+#     creates: /opt/microsoft/omsagent/bin/omsagent
+
+# - name: Configure rsyslog to send logs to AMA
+#   template:
+#     src: rsyslog-ama.conf.j2
+#     dest: /etc/rsyslog.d/10-ama.conf
+#     mode: '0644'
+#   notify: Restart rsyslog
+##
+- name: Set timezone to UTC
+  timezone:
+    name: UTC
