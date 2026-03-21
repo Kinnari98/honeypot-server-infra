@@ -22,7 +22,7 @@
       - rsyslog
     state: present
 
-- name: Set hostname #name needs to lure
+- name: Set hostname #name needs to lure attackers
   hostname:
     name: "{{ lure_hostname }}"
 
