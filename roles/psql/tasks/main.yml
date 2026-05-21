@@ -13,3 +13,38 @@
     name: postgresql
     state: started
     enabled: true
+
+- name: create honeypot database
+  community.postgresql.postgresql_db:
+    name: sales
+    state: present
+  become: true
+  become_user: postgres
+
+- name: create psqladmin user
+  community.postgresql.postgresql_user:
+    name: psqladmin
+    password:  "{{ psqladmin_password }}"
+    db: sales
+    state: present
+  become: true
+  become_user: postgres
+
+
+- name: create psqluser user
+  community.postgresql.postgresql_user:
+    name: psqluser
+    password:  "{{ psqluser_password }}"
+    db: sales
+    state: present
+  become: true
+  become_user: postgres
+
+- name: Give access to sales database for psqluser
+  community.postgresql.postgresql_privs:
+    db: sales
+    role: psqluser
+    type: database
+    privs: ALL
+  become: true
+  become_user: postgres

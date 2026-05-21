@@ -28,3 +28,7 @@ honeypot_open_ports:
   - { port: 445,  proto: "tcp", name: "SMB" }
   - { port: 3306, proto: "tcp", name: "MySQL" }
   - { port: 5900, proto: "tcp", name: "VNC" }
+
+  # ─── PSQL ──────────────────────────────────────────────────────────
+psqladmin_password: "<your_password>"
+psqluser_password: "<your_password>"
