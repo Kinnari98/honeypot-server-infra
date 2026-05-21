@@ -27,6 +27,7 @@
     password:  "{{ psqladmin_password }}"
     db: sales
     state: present
+    role_attr_flags: SUPERUSER
   become: true
   become_user: postgres
 
@@ -45,6 +46,6 @@
     db: sales
     role: psqluser
     type: database
-    privs: ALL
+    privs: CONNECT
   become: true
   become_user: postgres
