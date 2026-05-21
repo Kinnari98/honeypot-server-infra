@@ -1,0 +1,30 @@
+---
+## inventory/group_vars/all.yml.example
+##
+## Kopioi: cp inventory/group_vars/all.yml.example inventory/group_vars/all.yml
+## Täytä omat arvosi all.yml:ään.
+## all.yml on gitignored – se ei mene repoon.
+
+# ─── Honeypot-identiteetti ────────────────────────────────────────────────────
+lure_hostname: ""             # Palvelimen hostname hyökkääjälle (esim. prod-web01)
+
+# ─── Azure-infrastruktuuri ────────────────────────────────────────────────────
+azure_subscription_id: ""
+azure_resource_group:  ""
+azure_location:        ""
+azure_vm_size:         "Standard_B1ms"
+azure_vm_image:        "Canonical:ubuntu-24_04-lts:server:latest"
+
+# ─── Azure Monitor / Sentinel ─────────────────────────────────────────────────
+log_analytics_workspace_id:  ""
+log_analytics_workspace_key: ""
+
+# ─── Honeypot-portit ──────────────────────────────────────────────────────────
+honeypot_open_ports:
+  - { port: 22,   proto: "tcp", name: "SSH" }
+  - { port: 23,   proto: "tcp", name: "Telnet" }
+  - { port: 80,   proto: "tcp", name: "HTTP" }
+  - { port: 443,  proto: "tcp", name: "HTTPS" }
+  - { port: 445,  proto: "tcp", name: "SMB" }
+  - { port: 3306, proto: "tcp", name: "MySQL" }
+  - { port: 5900, proto: "tcp", name: "VNC" }

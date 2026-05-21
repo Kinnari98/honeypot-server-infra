@@ -1,7 +1,7 @@
 ---
 - name: Restart SSH
   service:
-    name: sshd
+    name: sshd   # RHEL: sshd, Ubuntu: ssh
     state: restarted
 
 - name: Restart rsyslog

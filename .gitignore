@@ -1,0 +1,39 @@
+# ─── SSH-avaimet ──────────────────────────────────────────────────────────────
+*.pem
+*.key
+*.ppk
+id_rsa
+id_rsa.pub
+id_ed25519
+id_ed25519.pub
+
+# ─── Ympäristömuuttujat ───────────────────────────────────────────────────────
+# Kopioi .env.example → .env ja täytä omat arvosi
+.env
+.env.local
+.env.*.local
+
+# ─── Ansible Vault ────────────────────────────────────────────────────────────
+.vault_pass
+.vault_password
+*.vaultpass
+vault_password_file
+
+# ─── Ansible runtime-tiedostot ────────────────────────────────────────────────
+*.retry
+.ansible/
+
+# ─── Lokaalit muuttujat (oikeat IP:t, portit, avaimet) ──────────────────────
+# *.example-tiedostot ovat repossa mallina – oikeat tiedostot gitignored
+inventory/host_vars/*.yml
+!inventory/host_vars/*.example.yml
+inventory/group_vars/all.yml
+inventory/*.local.yml
+inventory/local*.yml
+
+# ─── Editori ──────────────────────────────────────────────────────────────────
+.vscode/settings.json
+*.swp
+*.swo
+*~
+.idea/

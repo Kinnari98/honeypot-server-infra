@@ -1,0 +1,38 @@
+#!/bin/bash
+# Custom system status MOTD
+
+# Colors
+YELLOW='\033[1;33m'
+GREEN='\033[0;32m'
+RED='\033[0;31m'
+NC='\033[0m' # No Color
+
+echo ""
+echo -e "${YELLOW}=== System Status ===${NC}"
+
+# Hostname and uptime
+echo -e "  Hostname: ${GREEN}$(hostname -f)${NC}"
+echo -e "  Uptime:   $(uptime -p)"
+
+# CPU load
+LOAD=$(cat /proc/loadavg | awk '{print $1, $2, $3}')
+echo -e "  Load:     $LOAD (1, 5, 15 min)"
+
+# Memory usage
+MEM_TOTAL=$(free -m | awk '/^Mem:/ {print $2}')
+MEM_USED=$(free -m | awk '/^Mem:/ {print $3}')
+echo -e "  Memory:   ${MEM_USED}MB used of ${MEM_TOTAL}MB"
+
+# Disk usage for /
+DISK_USAGE=$(df -h / | awk 'NR==2 {print $3 " used of " $2 " (" $5 " full)"}')
+echo -e "  Disk (/): $DISK_USAGE"
+
+# Check for failed services
+FAILED=$(systemctl --failed --no-legend | wc -l)
+if [ "$FAILED" -gt 0 ]; then
+    echo -e "  Services: ${RED}$FAILED failed service(s)${NC}"
+else
+    echo -e "  Services: ${GREEN}All OK${NC}"
+fi
+
+echo ""

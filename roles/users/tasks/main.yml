@@ -1,0 +1,33 @@
+- name: Create psqladmin
+  ansible.builtin.user:
+    name: psqladmin
+    state: present
+    shell: /bin/bash
+    create_home: yes
+    home: /home/psqladmin
+
+- name: Create psqluser
+  ansible.builtin.user:
+    name: psqluser
+    state: present
+    shell: /sbin/nologin
+    create_home: yes
+    home: /home/psqluser
+
+- name: Create mimu
+  ansible.builtin.user:
+    name: mimu
+    state: present
+    shell: /bin/bash
+    create_home: yes
+    groups: wheel
+    home: /home/mimu
+
+- name: Create pela
+  ansible.builtin.user:
+    name: pela
+    state: present
+    shell: /bin/bash
+    create_home: yes
+    groups: wheel
+    home: /home/pela
