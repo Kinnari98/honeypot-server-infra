@@ -23,6 +23,7 @@
       - tcpdump
       - rsyslog
       - postgresql-server
+      - python3-psycopg2
     state: present
 
 - name: Set hostname
