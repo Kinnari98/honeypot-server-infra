@@ -1,0 +1,55 @@
+Just storing some queries here
+
+Syslog
+| where TimeGenerated > ago(14d)
+| where ProcessName == "auditd:" or ProcessName == "auth:"
+| where SyslogMessage has "AAAAB3NzaC1yc2EAAAABJQAAAQEArDp4cun2lhr4KUhBGE7VvAcwdli2a8dbnrTOrbMz1"
+// case_sensitive = true on oletus KQL:ssä has-operaattorille ei ole, käytetään contains_cs
+| where SyslogMessage contains_cs "AAAAB3NzaC1yc2EAAAABJQAAAQEArDp4cun2lhr4KUhBGE7VvAcwdli2a8dbnrTOrbMz1"
+| extend
+    src_ip  = extract(@"(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})", 1, SyslogMessage),
+    uid     = extract(@"uid=(\d+)", 1, SyslogMessage)
+| project TimeGenerated, src_ip, uid, SyslogMessage
+| extend AlertTitle = strcat("🔴 TUNNETTU SSH-AVAIN istutettu IP:ltä ", src_ip)
+
+
+// ============================================================
+// SÄÄNTÖ 2: Yleinen SSH-avainistutus (pattern)
+// Severity: High | Frequency: 5min | Period: 1h
+// MITRE: T1098.004 – SSH Authorized Keys
+// ============================================================
+Syslog
+| where TimeGenerated > ago(1h)
+| where ProcessName == "auditd:"
+| extend Event   = parse_json(extract(@"\{.*\}", 0, SyslogMessage))
+| extend eventid = tostring(Event.eventid)
+| extend input   = tostring(Event.input)
+| extend src_ip  = tostring(Event.src_ip)
+// Cowrie: tunnistaa komennon suoraan
+| where (
+    eventid == "cowrie.command.input"
+    and (
+        input has "authorized_keys"
+        or input has "chattr -ia .ssh"
+        or (input has "mkdir" and input has ".ssh")
+        or (input has "echo" and input has "ssh-rsa")
+        or (input has "echo" and input has "ssh-ed25519")
+    )
+)
+// Auditd: tunnistaa tiedostokirjoituksen oikealla palvelimella
+or (
+    ProcessName == "auditd:"
+    and SyslogMessage has "authorized_keys"
+    and SyslogMessage has_any ("WRITE", "CREATE", "open")
+)
+| extend AttackChain = case(
+    input has "chattr -ia .ssh",                        "Vaihe 1: Immutable-lipun poisto",
+    input has "rm -rf .ssh",                            "Vaihe 2: .ssh-hakemiston tyhjennys",
+    input has "mkdir" and input has ".ssh",             "Vaihe 3: .ssh-hakemiston luonti",
+    input has "authorized_keys" and input has "echo",   "Vaihe 4: SSH-avaimen istutus",
+    input has "authorized_keys",                        "Vaihe 4: authorized_keys muokattu",
+    "Tuntematon vaihe"
+  )
+| project TimeGenerated, src_ip, AttackChain, input, SyslogMessage
+| extend AlertTitle = strcat("🟠 SSH-avainistutus havaittu – ", AttackChain, " – IP: ", src_ip)
+| order by TimeGenerated asc

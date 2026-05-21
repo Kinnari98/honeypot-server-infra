@@ -1,0 +1,15 @@
+- name: Check if psql is initialized
+  stat:
+    path: /var/lib/pgsql/16/data/PG_VERSION
+  register: pgdata
+
+- name: Initialize psql database
+  command: /usr/bin/postgresql-setup --initdb
+  when: not pgdata.stat.exists
+  notify: Restart psql
+
+- name: start psql
+  service:
+    name: postgresql
+    state: started
+    enabled: true

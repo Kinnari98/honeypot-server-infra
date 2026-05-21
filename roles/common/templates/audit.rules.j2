@@ -1,0 +1,164 @@
+## /etc/audit/rules.d/honeypot.rules
+## Hallinnoi: Ansible (roles/common/templates/audit.rules.j2)
+##
+## Tarkoitus: Kirjaa kaikki syscall-tason tapahtumat honeypot-palvelimella.
+##            Lokit menevät → auditd → syslog (audisp-plugins) → AMA → Sentinel
+##
+## Syntaksi:
+##   -w <polku> -p <oikeudet> -k <tagi>
+##     Tiedostovalvonta. Oikeudet: r=luku, w=kirjoitus, x=suoritus, a=attribuutti
+##
+##   -a always,exit -F arch=b64 -S <syscall> -k <tagi>
+##     Syscall-valvonta. arch=b64 = 64-bit, duplikoidaan b32 32-bit ohjelmille.
+##
+##   -k <tagi> = hakuavain Sentinelissä (CommonSecurityLog-taulun RequestContext/Activity)
+
+## ── Puhdistetaan vanhat säännöt ──────────────────────────────────────────────
+-D
+
+## ── Puskurin koko (tapahtumat/sekunti) ───────────────────────────────────────
+## Honeypotilla on enemmän liikennettä kuin normaalilla serverillä
+-b 16384
+
+## ── Virhetila ─────────────────────────────────────────────────────────────────
+## 1 = kirjoita kernelin logiin jos puskuri täyttyy (järjestelmä ei pysähdy)
+-f 1
+
+## ══════════════════════════════════════════════════════════════════════════════
+## PROSESSIEN SUORITUS
+## Kirjataan jokainen ajettu komento. Tämä on tärkein sääntöryhmä:
+## nähdään täsmälleen mitä hyökkääjä tekee shellin saadessaan.
+## ══════════════════════════════════════════════════════════════════════════════
+-a always,exit -F arch=b64 -S execve -k process_execution
+-a always,exit -F arch=b32 -S execve -k process_execution
+
+## ══════════════════════════════════════════════════════════════════════════════
+## OIKEUKSIEN ESKALOINTI
+## sudo, su, pkexec ja setuid-syscallit. Hyökkääjä yrittää nousta root:iksi.
+## ══════════════════════════════════════════════════════════════════════════════
+-a always,exit -F arch=b64 -S setuid -S setgid -S setreuid -S setregid -k priv_escalation
+-a always,exit -F arch=b32 -S setuid -S setgid -S setreuid -S setregid -k priv_escalation
+-w /usr/bin/sudo    -p x -k priv_escalation
+-w /bin/su          -p x -k priv_escalation
+-w /usr/bin/pkexec  -p x -k priv_escalation
+
+## ══════════════════════════════════════════════════════════════════════════════
+## KÄYTTÄJÄ- JA RYHMÄHALLINTA
+## Hyökkääjä voi luoda piilotetun backdoor-tilin tai muokata sudoersia.
+## ══════════════════════════════════════════════════════════════════════════════
+-w /etc/passwd       -p wa -k user_management
+-w /etc/shadow       -p wa -k user_management
+-w /etc/group        -p wa -k user_management
+-w /etc/gshadow      -p wa -k user_management
+-w /etc/sudoers      -p wa -k user_management
+-w /etc/sudoers.d    -p wa -k user_management
+-w /usr/sbin/useradd -p x  -k user_management
+-w /usr/sbin/userdel -p x  -k user_management
+-w /usr/sbin/usermod -p x  -k user_management
+-w /usr/sbin/passwd  -p x  -k user_management
+
+## ══════════════════════════════════════════════════════════════════════════════
+## SSH-AVAIMET – yleisin backdoor-tekniikka
+## Hyökkääjä lisää oman julkisen avaimensa authorized_keys-tiedostoon.
+## kql.txt:ssä on Sentinel-kyselyt tähän kohdistuen.
+## ══════════════════════════════════════════════════════════════════════════════
+-w /root/.ssh                       -p rwxa -k ssh_key_injection
+-w /home                            -p wa   -k home_dir_changes
+
+## ══════════════════════════════════════════════════════════════════════════════
+## AUTENTIKAATIO
+## PAM-konfiguraatiomuutokset ja kirjautumislokit.
+## ══════════════════════════════════════════════════════════════════════════════
+-w /etc/pam.d    -p wa -k auth_config
+-w /etc/security -p wa -k auth_config
+-w /var/log/wtmp -p wa -k auth_log   # onnistuneet kirjautumiset
+-w /var/log/btmp -p wa -k auth_log   # epäonnistuneet kirjautumisyritykset
+-w /var/run/utmp -p wa -k auth_log   # aktiiviset sessiot
+
+## ══════════════════════════════════════════════════════════════════════════════
+## VERKKOKONFIGURAATIO
+## hosts, DNS, nettiliittymämuutokset. Hyökkääjä saattaa ohjata liikennettä.
+## ══════════════════════════════════════════════════════════════════════════════
+-w /etc/hosts         -p wa -k network_config
+-w /etc/resolv.conf   -p wa -k network_config
+-w /etc/network       -p wa -k network_config
+-w /etc/netplan       -p wa -k network_config
+-a always,exit -F arch=b64 -S socket  -k network_activity
+-a always,exit -F arch=b64 -S connect -k network_activity
+-a always,exit -F arch=b64 -S accept  -k network_activity
+-a always,exit -F arch=b64 -S bind    -k network_activity
+-a always,exit -F arch=b32 -S socket  -k network_activity
+-a always,exit -F arch=b32 -S connect -k network_activity
+
+## ══════════════════════════════════════════════════════════════════════════════
+## KERNEL-MODUULIT – rootkit-havaitseminen
+## Hyökkääjä voi ladata moduulin joka piilottaa prosessit/tiedostot/yhteydet.
+## ══════════════════════════════════════════════════════════════════════════════
+-w /sbin/insmod    -p x -k kernel_modules
+-w /sbin/rmmod     -p x -k kernel_modules
+-w /sbin/modprobe  -p x -k kernel_modules
+-a always,exit -F arch=b64 -S init_module   -k kernel_modules
+-a always,exit -F arch=b64 -S finit_module  -k kernel_modules
+-a always,exit -F arch=b64 -S delete_module -k kernel_modules
+
+## ══════════════════════════════════════════════════════════════════════════════
+## AJASTETUT TEHTÄVÄT – cron, systemd timers (persistenssi)
+## Hyökkääjä asentaa backdoorin herääväksi automaattisesti.
+## ══════════════════════════════════════════════════════════════════════════════
+-w /etc/cron.d         -p wa -k persistence_cron
+-w /etc/cron.daily     -p wa -k persistence_cron
+-w /etc/cron.hourly    -p wa -k persistence_cron
+-w /etc/cron.monthly   -p wa -k persistence_cron
+-w /etc/cron.weekly    -p wa -k persistence_cron
+-w /etc/crontab        -p wa -k persistence_cron
+-w /var/spool/cron     -p wa -k persistence_cron
+-w /etc/systemd/system -p wa -k persistence_systemd
+
+## ══════════════════════════════════════════════════════════════════════════════
+## LD_PRELOAD / KIRJASTOHYÖKKÄYKSET
+## Hookkaa kirjastofunktioita ennen oikeita kutsuja → näkymätön rootkit.
+## ══════════════════════════════════════════════════════════════════════════════
+-w /etc/ld.so.preload -p wa -k ld_preload_rootkit
+-w /etc/ld.so.conf    -p wa -k ld_preload_rootkit
+-w /etc/ld.so.conf.d  -p wa -k ld_preload_rootkit
+
+## ══════════════════════════════════════════════════════════════════════════════
+## JÄRJESTELMÄBINÄÄRIT – troijalaisten havaitseminen
+## Korvattu /bin/ls tai /usr/bin/python3 tms. = vakava indikaattori.
+## ══════════════════════════════════════════════════════════════════════════════
+-w /bin      -p wa -k binary_tampering
+-w /sbin     -p wa -k binary_tampering
+-w /usr/bin  -p wa -k binary_tampering
+-w /usr/sbin -p wa -k binary_tampering
+-w /usr/lib  -p wa -k binary_tampering
+-w /lib      -p wa -k binary_tampering
+-w /lib64    -p wa -k binary_tampering
+
+## ══════════════════════════════════════════════════════════════════════════════
+## LOKIEN TUHOAMINEN – hyökkääjä yrittää pyyhkiä jälkensä
+## Koska lokit on jo lähetetty Sentineliin, paikallinen poisto ei auta.
+## ══════════════════════════════════════════════════════════════════════════════
+-w /var/log -p wa -k log_tampering
+
+## ══════════════════════════════════════════════════════════════════════════════
+## TIEDOSTO-OIKEUDET JA OMISTAJUUS
+## chmod/chown voi paljastaa valmisteluja (esim. SUID-binäärin asennus).
+## ══════════════════════════════════════════════════════════════════════════════
+-a always,exit -F arch=b64 -S chmod  -S fchmod  -S fchmodat  -k file_permissions
+-a always,exit -F arch=b64 -S chown  -S fchown  -S fchownat  -S lchown -k file_ownership
+-a always,exit -F arch=b32 -S chmod  -S fchmod  -S fchmodat  -k file_permissions
+-a always,exit -F arch=b32 -S chown  -S fchown  -S fchownat  -S lchown -k file_ownership
+
+## ══════════════════════════════════════════════════════════════════════════════
+## TIEDOSTOJEN POISTAMINEN
+## unlink/rename paljastaa jälkien pyyhkimisyrityksiä.
+## ══════════════════════════════════════════════════════════════════════════════
+-a always,exit -F arch=b64 -S unlink -S unlinkat -S rename -S renameat -k file_deletion
+-a always,exit -F arch=b32 -S unlink -S unlinkat -S rename -S renameat -k file_deletion
+
+## ══════════════════════════════════════════════════════════════════════════════
+## LUKITSE SÄÄNNÖT – estä auditd:n poistaminen käytöstä
+## -e 2: säännöt ovat muuttumattomia uudelleenkäynnistykseen asti.
+## Hyökkääjä ei voi poistaa auditia ilman rebootia (joka myös lokitetaan).
+## ══════════════════════════════════════════════════════════════════════════════
+-e 2

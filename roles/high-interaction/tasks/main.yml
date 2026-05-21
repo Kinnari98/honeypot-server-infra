@@ -1,0 +1,48 @@
+- name: Define MOTD banner
+  ansible.builtin.template:
+    src: motd.j2
+    dest: /etc/motd
+    owner: root
+    group: root
+    mode: '0755'
+  become: true
+
+- name: Deploy script
+  ansible.builtin.template:
+    src: system-status.sh.j2
+    dest: /etc/profile.d/system-status.sh
+    owner: root
+    group: root
+    mode: '0755'
+  become: true
+
+- name: Define pre-login banner
+  ansible.builtin.template:
+    src: issue.net.j2
+    dest: /etc/issue.net
+    owner: root
+    group: root
+    mode: '0755'
+  become: true
+
+- name: Delete content from motd.d
+  ansible.builtin.file:
+    path: /etc/insights-client/insights-client.motd
+    state: absent
+  become: true
+
+- name: Configure SSH to show pre-login banner
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^#?Banner'
+    line: 'Banner /etc/issue.net'
+  notify: Restart sshd
+  become: true
+
+- name: Configure SSH to show MOTD after login
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^#?PrintMotd'
+    line: 'PrintMotd yes'
+  notify: Restart sshd
+  become: true
