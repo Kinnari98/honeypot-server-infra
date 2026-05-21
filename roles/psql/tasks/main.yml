@@ -1,6 +1,6 @@
 - name: Check if psql is initialized
   stat:
-    path: /var/lib/pgsql/16/data/PG_VERSION
+    path: /var/lib/pgsql/data/PG_VERSION
   register: pgdata
 
 - name: Initialize psql database
