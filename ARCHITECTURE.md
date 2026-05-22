@@ -54,9 +54,20 @@ Banneristrategia: palvelin esittäytyy PostgreSQL-tietokantapalvelimena tuotanto
 
 ### `psql` – PostgreSQL
 
-- Asennus ja initialisointi (`postgresql-setup --initdb`)
+- Asennus (`postgresql-server`, `python3-psycopg2`) ja initialisointi (`postgresql-setup --initdb`)
 - Palvelun käynnistys ja autostart
-- Kantojen ja käyttäjien konfiguraatio
+- `sales`-tietokannan luonti
+- PostgreSQL-käyttäjät: `psqladmin` (SUPERUSER), `psqluser` (CONNECT)
+- Taulurakenne:
+
+| Taulu | Kentät |
+|---|---|
+| `customers` | id, name, email |
+| `products` | id, name, price |
+| `orders` | id, customer_id (FK), product_id (FK), amount, order_date |
+
+- Fake-data: asiakkaat, tuotteet ja tilaukset insertoidaan idempotentisti (`COUNT`-tarkistus)
+- Backup: `/var/backups/sales-db/` – oikea pg_dump-tiedosto (lure)
 
 ### `users` – fake-käyttäjät
 
