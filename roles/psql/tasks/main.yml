@@ -49,3 +49,24 @@
     privs: CONNECT
   become: true
   become_user: postgres
+
+- name: Create table customers in sales database
+  community.postgresql.postgresql_query:
+    db: sales
+    query: "CREATE TABLE IF NOT EXISTS customers (id SERIAL PRIMARY KEY, name VARCHAR(255), email VARCHAR(255));"
+  become: true
+  become_user: postgres
+
+- name: Create table products in sales database
+  community.postgresql.postgresql_query:
+    db: sales
+    query: "CREATE TABLE IF NOT EXISTS products (id SERIAL PRIMARY KEY, name VARCHAR(255), price DECIMAL);"
+  become: true
+  become_user: postgres
+
+- name: Create table orders in sales database
+  community.postgresql.postgresql_query:
+    db: sales
+    query: "CREATE TABLE IF NOT EXISTS orders (id SERIAL PRIMARY KEY, customer_id INTEGER REFERENCES customers(id), product_id INTEGER REFERENCES products(id), amount INTEGER, order_date DATE);"
+  become: true
+  become_user: postgres
