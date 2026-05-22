@@ -1,0 +1,9 @@
+- name: Harden honeypot server
+  hosts: machines
+  become: true         # sudo-oikeudet palvelimella
+
+  roles:
+    ## Vaihe 1: Pohjakovennukset, auditd, UFW, SSH-hardening
+    ## Dokumentaatio: roles/common/tasks/main.yml
+    - role: defender
+      tags: [defender, harden]
