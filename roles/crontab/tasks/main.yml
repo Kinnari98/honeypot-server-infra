@@ -1,0 +1,17 @@
+- name: Create backup directory
+  file:
+    path: /var/backups/sales-db
+    state: directory
+    owner: postgres
+    group: postgres
+    mode: '0755'
+
+- name: Create cronjob for psql backup
+  cron:
+    name: "PostgreSQL backup"
+    minute: "0"
+    hour: "2"
+    month: "*"
+    weekday: "0"
+    user: postgres
+    job: "pg_dump -U postgres sales > /var/backups/sales-db/sales_$(date +\\%Y\\%m\\%d).sql"
