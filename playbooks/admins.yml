@@ -1,0 +1,7 @@
+- name: Deploy admins to server
+  hosts: machines
+  become: true         # sudo-oikeudet palvelimella
+
+  roles:
+    - role: admins
+      tags: [admins, access]
