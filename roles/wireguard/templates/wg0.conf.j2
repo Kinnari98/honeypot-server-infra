@@ -1,0 +1,17 @@
+
+## WireGuard configuration file template (wg0.conf.j2)
+
+
+[Interface]
+Address = {{ wireguard_server_address }}
+ListenPort = {{ wireguard_server_port }}
+PrivateKey = {{ wireguard_server_private_key }}
+
+[Peer]
+PublicKey = {{ wireguard_admin1_public_key }}
+AllowedIPs = {{ wireguard_admin1_allowed_ips }}/32
+
+[Peer]
+PublicKey = {{ wireguard_admin2_public_key }}
+AllowedIPs = {{ wireguard_admin2_allowed_ips }}/32  
+
