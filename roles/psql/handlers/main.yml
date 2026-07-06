@@ -2,3 +2,8 @@
   service:
     name: postgresql
     state: restarted
+
+- name: Reload psql
+  service:
+    name: postgresql
+    state: reloaded

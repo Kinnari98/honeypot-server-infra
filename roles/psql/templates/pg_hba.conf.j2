@@ -1,0 +1,9 @@
+# roles/psql/templates/pg_hba.conf.j2
+# PostgreSQL Client Authentication Configuration
+# Managed by Ansible - do not edit manually
+# Lähde-muuttuja: roles/psql/defaults/main.yml → postgresql_hba_entries
+
+# TYPE  DATABASE        USER            ADDRESS                 METHOD
+{% for entry in postgresql_hba_entries %}
+{{ "%-7s"|format(entry.type) }} {{ "%-15s"|format(entry.database) }} {{ "%-15s"|format(entry.user) }} {{ "%-23s"|format(entry.address | default('')) }} {{ entry.method }}
+{% endfor %}
