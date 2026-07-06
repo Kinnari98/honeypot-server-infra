@@ -1,7 +1,12 @@
-- name: Bring Microsoft packages repository GPG key to the system
-  rpm_key:
-    state: present
-    key: https://packages.microsoft.com/keys/microsoft.asc
+- name: Check if Microsoft GPG key is imported
+  ansible.builtin.command: rpm -q gpg-pubkey-be1229cf
+  register: ms_key_check
+  changed_when: false
+  failed_when: false
+
+- name: Import Microsoft GPG key (rpm native, RHEL 10 / Sequoia -yhteensopiva)
+  ansible.builtin.command: rpm --import https://packages.microsoft.com/keys/microsoft.asc
+  when: ms_key_check.rc != 0
 
 - name: Install microsoft packages repository
   dnf:
@@ -26,6 +31,7 @@
     owner: root
     group: root
     mode: '0644'
+  notify: Reload sysmon config
 
 - name: Check if sysmon service is registered
   ansible.builtin.command: systemctl list-unit-files sysmon.service
