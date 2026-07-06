@@ -13,23 +13,23 @@
     name: sysmonforlinux
     state: present
 
-- name: Install sysmon-config.xml to /etc/sysmon-config.xml.j2
-  copy:
-    src: sysmon-config.xml
-    dest: /etc/sysmon-config.xml.j2
+- name: Install sysmon-config.xml to /etc/sysmon/sysmon-config.xml.j2
+  template:
+    src: sysmon-config.xml.j2
+    dest: /etc/sysmon/sysmon-config.xml
     owner: root
     group: root
     mode: '0644'
 
-- name: Check if sysmon is already installed
-  stat:
-    path: /usr/bin/sysmon
-  register: sysmon_check
-  ignore_errors: true
+- name: Check if sysmon service is registered
+  ansible.builtin.command: systemctl list-unit-files sysmon.service
+  register: sysmon_svc
+  changed_when: false
+  failed_when: false
 
-- name: Install sysmon
-  command: sysmon -accepteula -i /etc/sysmon-config.xml.j2
-  when: not sysmon_check.stat.exists
+- name: Install sysmon (first time only)
+  ansible.builtin.command: sysmon -accepteula -i /etc/sysmon/config.xml
+  when: "'sysmon.service' not in sysmon_svc.stdout"
 
 
 
