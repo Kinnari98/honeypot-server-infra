@@ -14,6 +14,26 @@
     state: started
     enabled: true
 
+# ── Authentication & logging ──────────────────────────────────────────────────
+
+- name: Deploy pg_hba.conf (client authentication)
+  template:
+    src: pg_hba.conf.j2
+    dest: /var/lib/pgsql/data/pg_hba.conf
+    owner: postgres
+    group: postgres
+    mode: '0600'
+  notify: Reload psql
+
+- name: Configure PostgreSQL logging (honeypot visibility)
+  community.postgresql.postgresql_set:
+    name: "{{ item.name }}"
+    value: "{{ item.value }}"
+  loop: "{{ postgresql_settings }}"
+  become: true
+  become_user: postgres
+  notify: Reload psql
+
 - name: create honeypot database
   community.postgresql.postgresql_db:
     name: sales

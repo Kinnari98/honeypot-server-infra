@@ -1,0 +1,28 @@
+---
+## roles/psql/defaults/main.yml
+## PostgreSQL-roolin oletusmuuttujat. Voi ylikirjoittaa group_vars/host_vars-tasolla.
+
+# ── Client authentication (pg_hba.conf) ───────────────────────────────────────
+# RHEL:llä pg_hba.conf on data-hakemistossa: /var/lib/pgsql/data/pg_hba.conf
+#
+#   peer          = local-socket, Linux-käyttäjä = PostgreSQL-rooli
+#                   (esim. `sudo -u psqladmin psql` → kirjautuu psqladminina)
+#   scram-sha-256  = salasana-autentikaatio (TCP localhost)
+#
+# Vain localhost sallitaan – ulkoinen pääsy estyy listen_addresses=localhost
+# sekä firewallilla (5432 ei ole honeypot_open_ports-listassa).
+postgresql_hba_entries:
+  - { type: local, database: all, user: postgres, method: peer }
+  - { type: local, database: all, user: all,      method: peer }
+  - { type: host,  database: all, user: all, address: "127.0.0.1/32", method: scram-sha-256 }
+  - { type: host,  database: all, user: all, address: "::1/128",      method: scram-sha-256 }
+
+# ── postgresql.conf-parametrit (ALTER SYSTEM → postgresql.auto.conf) ───────────
+# Honeypot-periaate: maksimoi näkyvyys. Lokitetaan kaikki yhteydet ja kyselyt,
+# jotta hyökkääjän toiminta päätyy lokeihin → Sentinel.
+# Kaikki nämä ovat reload-tason parametreja (ei vaadi restartia).
+postgresql_settings:
+  - { name: log_connections,    value: "on" }
+  - { name: log_disconnections, value: "on" }
+  - { name: log_statement,      value: "all" }
+  - { name: log_line_prefix,    value: "%m [%p] user=%u,db=%d,client=%h " }
