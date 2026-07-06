@@ -1,0 +1,35 @@
+- name: Bring Microsoft packages repository GPG key to the system
+  rpm_key:
+    state: present
+    key: https://packages.microsoft.com/keys/microsoft.asc
+
+- name: Install microsoft packages repository
+  dnf:
+    name: "https://packages.microsoft.com/config/rhel/{{ ansible_distribution_major_version }}/packages-microsoft-prod.rpm"
+    state: present
+
+- name: Install sysmonforlinux
+  dnf:
+    name: sysmonforlinux
+    state: present
+
+- name: Install sysmon-config.xml to /etc/sysmon-config.xml.j2
+  copy:
+    src: sysmon-config.xml
+    dest: /etc/sysmon-config.xml.j2
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Check if sysmon is already installed
+  stat:
+    path: /usr/bin/sysmon
+  register: sysmon_check
+  ignore_errors: true
+
+- name: Install sysmon
+  command: sysmon -accepteula -i /etc/sysmon-config.xml.j2
+  when: not sysmon_check.stat.exists
+
+
+

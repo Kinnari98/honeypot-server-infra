@@ -1,0 +1,28 @@
+<Sysmon schemaversion="4.90">
+  <EventFiltering>
+    <!-- Kirjaa jokainen käynnistetty prosessi -->
+    <RuleGroup name="process-create" groupRelation="or">
+      <ProcessCreate onmatch="exclude"/>
+    </RuleGroup>
+
+    <!-- Kirjaa jokainen ulos/sisään avattu verkkoyhteys -->
+    <RuleGroup name="network-connect" groupRelation="or">
+      <NetworkConnect onmatch="exclude"/>
+    </RuleGroup>
+
+    <!-- Kirjaa jokainen tiedostoluonti -->
+    <RuleGroup name="file-create" groupRelation="or">
+      <FileCreate onmatch="exclude"/>
+    </RuleGroup>
+
+      <!-- Kirjaa jokainen tiedostopoisto -->
+    <RuleGroup name="file-delete" groupRelation="or">
+      <FileDelete onmatch="exclude"/>
+    </RuleGroup>
+
+      <!-- Kirjaa jokainen prosessilopetus -->
+    <RuleGroup name="process-terminate" groupRelation="or">
+      <ProcessTerminate onmatch="exclude"/>
+    </RuleGroup>
+  </EventFiltering>
+</Sysmon>
