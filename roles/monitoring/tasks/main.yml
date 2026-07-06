@@ -13,7 +13,13 @@
     name: sysmonforlinux
     state: present
 
-- name: Install sysmon-config.xml to /etc/sysmon/sysmon-config.xml.j2
+- name: Ensure sysmon directory exists
+  file:
+    path: /etc/sysmon
+    state: directory
+    mode: '0755'
+
+- name: Install sysmon-config.xml to /etc/sysmon/sysmon-config.xml
   template:
     src: sysmon-config.xml.j2
     dest: /etc/sysmon/sysmon-config.xml
@@ -28,7 +34,7 @@
   failed_when: false
 
 - name: Install sysmon (first time only)
-  ansible.builtin.command: sysmon -accepteula -i /etc/sysmon/config.xml
+  ansible.builtin.command: sysmon -accepteula -i /etc/sysmon/sysmon-config.xml
   when: "'sysmon.service' not in sysmon_svc.stdout"
 
 
