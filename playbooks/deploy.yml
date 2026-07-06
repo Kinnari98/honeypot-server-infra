@@ -27,3 +27,5 @@
       tags: [psql, database]
     - role: crontab
       tags: [crontab, backup]
+    - role: monitoring
+      tags: [monitoring, sysmon]

@@ -1,8 +1,13 @@
 <Sysmon schemaversion="4.90">
   <EventFiltering>
-    <!-- Kirjaa jokainen käynnistetty prosessi -->
+    <!-- Kirjaa jokainen käynnistetty prosessi (paitsi tunnettu Azure-kohina) -->
     <RuleGroup name="process-create" groupRelation="or">
-      <ProcessCreate onmatch="exclude"/>
+      <ProcessCreate onmatch="exclude">
+        <!-- Azuren WALinuxAgent ajaa jatkuvasti iptables-tarkistuksia omasta
+             hakemistostaan. Suodatetaan CurrentDirectoryn perusteella, EI itse
+             iptables-komennon – jotta hyökkääjän ajama iptables näkyy silti. -->
+        <CurrentDirectory condition="contains">waagent</CurrentDirectory>
+      </ProcessCreate>
     </RuleGroup>
 
     <!-- Kirjaa jokainen ulos/sisään avattu verkkoyhteys -->
@@ -10,19 +15,27 @@
       <NetworkConnect onmatch="exclude"/>
     </RuleGroup>
 
-    <!-- Kirjaa jokainen tiedostoluonti -->
+    <!-- Kirjaa jokainen tiedostoluonti (paitsi rsyslogin tilatiedostot) -->
     <RuleGroup name="file-create" groupRelation="or">
-      <FileCreate onmatch="exclude"/>
+      <FileCreate onmatch="exclude">
+        <!-- rsyslogd kirjoittaa jatkuvasti imjournal.state-tiedostoja -->
+        <TargetFilename condition="begin with">/var/lib/rsyslog</TargetFilename>
+      </FileCreate>
     </RuleGroup>
 
-      <!-- Kirjaa jokainen tiedostopoisto -->
+    <!-- Kirjaa jokainen tiedostopoisto -->
     <RuleGroup name="file-delete" groupRelation="or">
       <FileDelete onmatch="exclude"/>
     </RuleGroup>
 
-      <!-- Kirjaa jokainen prosessilopetus -->
+    <!-- Kirjaa jokainen prosessilopetus (paitsi WALinuxAgentin iptables-prosessit) -->
     <RuleGroup name="process-terminate" groupRelation="or">
-      <ProcessTerminate onmatch="exclude"/>
+      <ProcessTerminate onmatch="exclude">
+        <!-- ProcessTerminate-tapahtumassa ei ole CurrentDirectory-kenttää, joten
+             suodatetaan Imagen perusteella. Hyökkääjän iptables-ajo näkyy silti
+             ProcessCreate-tapahtumana (yllä), vain terminointi jää pois. -->
+        <Image condition="end with">xtables-nft-multi</Image>
+      </ProcessTerminate>
     </RuleGroup>
   </EventFiltering>
 </Sysmon>
