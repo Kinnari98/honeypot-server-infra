@@ -1,0 +1,24 @@
+---
+## inventory/group_vars/all/vars.yml.example
+## Malli forkkaajille. Kopioi tämä ja täytä omat arvosi:
+##   cp inventory/group_vars/all/vars.yml.example inventory/group_vars/all/vars.yml
+##
+## Arat arvot (lure_hostname, salasanat, workspace key) määritellään omassa
+## vault.yml:ssä – katso vault.yml.example. Tee OMA vault-salasana.
+
+# ─── Ei-arka konfiguraatio ────────────────────────────────────────────────────
+honeypot_open_ports:
+  - { port: 22, proto: "tcp", name: "SSH" }
+
+azure_location: ""            # esim. swedencentral
+azure_vm_size:  "Standard_B1ms"
+azure_vm_image: "Canonical:ubuntu-24_04-lts:server:latest"
+
+# ─── Arat arvot – arvot omassa vaultatussa vault.yml:ssä ──────────────────────
+lure_hostname:               "{{ vault_lure_hostname }}"
+azure_subscription_id:       "{{ vault_azure_subscription_id }}"
+azure_resource_group:        "{{ vault_azure_resource_group }}"
+log_analytics_workspace_id:  "{{ vault_log_analytics_workspace_id }}"
+log_analytics_workspace_key: "{{ vault_log_analytics_workspace_key }}"
+psqladmin_password:          "{{ vault_psqladmin_password }}"
+psqluser_password:           "{{ vault_psqluser_password }}"

@@ -1,0 +1,17 @@
+---
+## inventory/group_vars/all/vault.yml.example
+## Malli forkkaajille salaisuuksille. Kopioi ja täytä omat arvosi:
+##   cp inventory/group_vars/all/vault.yml.example inventory/group_vars/all/vault.yml
+##
+## Salaa sitten OMALLA vault-salasanallasi:
+##   ansible-vault encrypt inventory/group_vars/all/vault.yml
+##
+## Vasta salattuna tämä on turvallista committoida.
+
+vault_lure_hostname:               ""   # esim. prod-db01
+vault_azure_subscription_id:       ""
+vault_azure_resource_group:        ""
+vault_log_analytics_workspace_id:  ""
+vault_log_analytics_workspace_key: ""   # Log Analytics → Agents → Primary key
+vault_psqladmin_password:          ""
+vault_psqluser_password:           ""
