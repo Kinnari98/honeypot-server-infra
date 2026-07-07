@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+#
+# Pre-commit hook: estää salaamattoman ansible-vault-tiedoston committaamisen.
+#
+# Aktivoi kerran per kehittäjä (hook on versionhallinnassa, mutta git ei
+# ota sitä käyttöön automaattisesti):
+#
+#   git config core.hooksPath .githooks
+#
+set -eu
+
+# Tiedostot jotka pitää AINA olla ansible-vaultilla salattuja.
+# Lisää tähän uudet vault-tiedostot jos niitä tulee.
+VAULT_FILES="
+inventory/group_vars/all/vault.yml
+roles/admins/tasks/main.yml
+"
+
+VAULT_HEADER='$ANSIBLE_VAULT'
+fail=0
+
+is_listed() {
+  # Palauttaa 0 jos $1 on VAULT_FILES-listalla
+  printf '%s\n' $VAULT_FILES | grep -qxF "$1"
+}
+
+# Käy läpi staged (Added/Modified) tiedostot
+for file in $(git diff --cached --name-only --diff-filter=AM); do
+  [ -z "$file" ] && continue
+
+  should_be_vault=0
+
+  # a) eksplisiittinen lista
+  if is_listed "$file"; then
+    should_be_vault=1
+  else
+    # b) oliko tiedosto jo aiemmin salattu HEADissa? (estää vahingossa purun)
+    head_first="$(git show "HEAD:$file" 2>/dev/null | head -1 || true)"
+    case "$head_first" in
+      "$VAULT_HEADER"*) should_be_vault=1 ;;
+    esac
+  fi
+
+  [ "$should_be_vault" -eq 1 ] || continue
+
+  # Tarkista staged-version ensimmäinen rivi
+  staged_first="$(git show ":$file" 2>/dev/null | head -1 || true)"
+  case "$staged_first" in
+    "$VAULT_HEADER"*) : ;;  # ok, salattu
+    *)
+      echo "ERROR: '$file' ei ole ansible-vaultilla salattu!"
+      echo "       Salaa se ennen committia:  ansible-vault encrypt $file"
+      fail=1
+      ;;
+  esac
+done
+
+if [ "$fail" -ne 0 ]; then
+  echo ""
+  echo "Commit estetty: salaamattomia vault-tiedostoja staged-tilassa."
+  exit 1
+fi
+
+exit 0

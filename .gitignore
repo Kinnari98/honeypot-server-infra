@@ -27,9 +27,13 @@ vault_password_file
 # *.example-tiedostot ovat repossa mallina – oikeat tiedostot gitignored
 inventory/host_vars/*.yml
 !inventory/host_vars/*.example.yml
-inventory/group_vars/all.yml
 inventory/*.local.yml
 inventory/local*.yml
+
+# ─── group_vars/all/ ──────────────────────────────────────────────────────────
+# vars.yml (selkokielinen) ja vault.yml (SALATTU) committoidaan tarkoituksella.
+# vault.yml on turvallista pushata VAIN ansible-vaultilla salattuna.
+# HUOM: älä koskaan committaa vault.yml:ää salaamattomana.
 
 # ─── Editori ──────────────────────────────────────────────────────────────────
 .vscode/settings.json

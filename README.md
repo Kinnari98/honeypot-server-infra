@@ -48,15 +48,58 @@ all:
         hannibal:
 ```
 
-### 2. Globaalit muuttujat
+### 2. Globaalit muuttujat (`group_vars/all/`)
+
+Globaali konfiguraatio on jaettu kahtia salaisuuksien suojaamiseksi:
+
+| Tiedosto | Sisältö | Versionhallinnassa |
+|----------|---------|--------------------|
+| `vars.yml` | Ei-arka konfiguraatio (portit, Azure-alue, VM-koko) | Selkokielisenä |
+| `vault.yml` | Salaisuudet + arat arvot (salasanat, workspace key, hostname, subscription id) | **Ansible-vaultilla salattuna** |
+
+`vars.yml` viittaa salaisuuksiin `vault_`-etuliitteellä (esim. `psqladmin_password: "{{ vault_psqladmin_password }}"`), joten näet mitkä arvot ovat arkoja ilman että ne ovat selkokielisinä repossa.
+
+Kopioi mallit ja täytä arvot:
 
 ```bash
-cp inventory/group_vars/all.yml.example inventory/group_vars/all.yml
+cp inventory/group_vars/all/vars.yml.example  inventory/group_vars/all/vars.yml
+cp inventory/group_vars/all/vault.yml.example inventory/group_vars/all/vault.yml
 ```
 
-Täytä `all.yml`:ään vähintään `lure_hostname`, `honeypot_open_ports` sekä PostgreSQL-salasanat (`psqladmin_password`, `psqluser_password`). Azure- ja Sentinel-muuttujat tarvitaan lokikeräystä varten.
+Täytä salaisuudet `vault.yml`:ään ja **salaa se ennen committia**:
 
-`host_vars/<hostname>.yml` ja `group_vars/all.yml` ovat gitignored – ne eivät mene repoon.
+```bash
+ansible-vault encrypt inventory/group_vars/all/vault.yml
+```
+
+> Salattuna `vault.yml` on turvallista pushata julkiseenkin repoon – tiimin jäsenet tarvitsevat vain jaetun vault-salasanan. Tarkista aina ennen committia että ekalla rivillä lukee `$ANSIBLE_VAULT`, ei `---`.
+
+`host_vars/<hostname>.yml` on gitignored (palvelinkohtaiset yhteystiedot). `vars.yml` ja `vault.yml` sen sijaan **committoidaan** – näin tiimi jakaa saman konfiguraation gitin kautta. `vault.yml` menee repoon **salattuna**.
+
+### 2b. Vault-salasana
+
+Playbookit lataavat `vault.yml`:n, joten jokainen ajo tarvitsee vault-salasanan. Valitse jompikumpi:
+
+```bash
+# Vaihtoehto A – salasanatiedosto (ei tarvitse kirjoittaa joka ajolla)
+echo "vault-salasanasi" > .vault_pass && chmod 600 .vault_pass
+export ANSIBLE_VAULT_PASSWORD_FILE=.vault_pass    # esim. .bashrc:hen
+
+# Vaihtoehto B – kysy joka ajolla
+ansible-playbook playbooks/deploy.yml --ask-vault-pass
+```
+
+`.vault_pass` on gitignored – se ei mene repoon. Jaa vault-salasana tiimin kesken turvallisesti (esim. salasananhallinta), ei Slackissa/sähköpostissa.
+
+### 2c. Pre-commit-hook (estää vahingossa vuotavat salaisuudet)
+
+Repossa on git-hook joka **estää salaamattoman `vault.yml`:n committaamisen**. Se on versionhallinnassa (`.githooks/`), mutta git ei ota sitä käyttöön automaattisesti – aktivoi kerran:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+Tämän jälkeen jokainen `git commit` tarkistaa staged vault-tiedostot, ja jos jokin ei ala `$ANSIBLE_VAULT`-otsikolla, commit estyy. Suositellaan kaikille tiimin jäsenille.
 
 ### 3. Admin-käyttäjät (ansible-vault)
 
@@ -81,7 +124,9 @@ ansible-vault edit roles/admins/tasks/main.yml
 ansible-playbook playbooks/deploy.yml
 ```
 
-Ajaa järjestyksessä: `common` → `high-interaction` → `users` → `psql` → `crontab`.
+Ajaa järjestyksessä: `common` → `high-interaction` → `users` → `psql` → `crontab` → `monitoring`.
+
+> Deploy lataa `group_vars/all/vault.yml`:n, joten se tarvitsee vault-salasanan (ks. kohta 2b). Jos et käytä `.vault_pass`-tiedostoa, lisää `--ask-vault-pass`.
 
 ### Admin-käyttäjät (vaultattu, ajetaan erikseen)
 
@@ -211,13 +256,16 @@ AMA asennetaan automaattisesti kun DCR (Data Collection Rule) liitetään VM:ä�
 ├── inventory/
 │   ├── hosts.yml                        # Palvelinaliakset (ei yhteystietoja)
 │   ├── group_vars/
-│   │   ├── all.yml                      # Globaalit muuttujat (gitignored)
-│   │   └── all.yml.example              # Pohja all.yml:lle
+│   │   └── all/
+│   │       ├── vars.yml                 # Ei-arka konfiguraatio (committoitu)
+│   │       ├── vars.yml.example         # Pohja vars.yml:lle
+│   │       ├── vault.yml                # Salaisuudet (committoitu SALATTUNA)
+│   │       └── vault.yml.example        # Pohja vault.yml:lle
 │   └── host_vars/
 │       ├── hannibal.yml                 # Hannibalin yhteystiedot (gitignored)
 │       └── server-name.yml.example      # Pohja host_vars-tiedostolle
 ├── playbooks/
-│   ├── deploy.yml                       # Pääplaybook (common, high-interaction, users, psql, crontab)
+│   ├── deploy.yml                       # Pääplaybook (common, high-interaction, users, psql, crontab, monitoring)
 │   ├── admins.yml                       # Oikeat ylläpitäjät (vaultattu admins-rooli)
 │   ├── harden.yml                       # WIP: defender-rooli
 │   └── update.yml                       # WIP: pakettipäivitykset / huoltokatkot
@@ -244,6 +292,11 @@ AMA asennetaan automaattisesti kun DCR (Data Collection Rule) liitetään VM:ä�
     │   ├── handlers/main.yml
     │   └── templates/
     │       └── backup_postgresql.sh
+    ├── monitoring/                      # Sysmon for Linux – telemetria syslogiin
+    │   ├── tasks/main.yml
+    │   ├── handlers/main.yml
+    │   └── templates/
+    │       └── sysmon-config.xml.j2
     └── admins/                          # Oikeat ylläpitäjät – ansible-vaultilla salattu
         └── tasks/main.yml
 ```

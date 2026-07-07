@@ -15,11 +15,14 @@
       <NetworkConnect onmatch="exclude"/>
     </RuleGroup>
 
-    <!-- Kirjaa jokainen tiedostoluonti (paitsi rsyslogin tilatiedostot) -->
+    <!-- Kirjaa jokainen tiedostoluonti (paitsi Azuren agenttien tilatiedostot) -->
     <RuleGroup name="file-create" groupRelation="or">
       <FileCreate onmatch="exclude">
         <!-- rsyslogd kirjoittaa jatkuvasti imjournal.state-tiedostoja -->
         <TargetFilename condition="begin with">/var/lib/rsyslog</TargetFilename>
+        <!-- Azuren WALinuxAgent + Guest Configuration (gc_worker) kirjoittavat
+             jatkuvasti event-/tilatiedostoja tänne -->
+        <TargetFilename condition="begin with">/var/lib/waagent</TargetFilename>
       </FileCreate>
     </RuleGroup>
 

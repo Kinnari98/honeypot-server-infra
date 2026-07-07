@@ -1,0 +1,25 @@
+---
+## inventory/group_vars/all/vars.yml
+## Committoitu, SELKOKIELINEN konfiguraatio – ei salaisuuksia.
+## Salaisuudet ja ympäristökohtaiset arvot ovat vault.yml:ssä (salattu).
+## vars.yml viittaa niihin vault_-etuliitteellä.
+
+# ─── Ei-arka konfiguraatio (turvallista julkaista) ────────────────────────────
+honeypot_open_ports:
+  - { port: 22, proto: "tcp", name: "SSH" }
+
+azure_location: "swedencentral"
+azure_vm_size:  "Standard_B1ms"
+azure_vm_image: "Canonical:ubuntu-24_04-lts:server:latest"
+
+# ─── Arat arvot – oikeat arvot vault.yml:ssä (salattu) ────────────────────────
+# Nämä paljastaisivat honeypotin identiteetin tai Azure-ympäristön, joten
+# ne haetaan vaultatusta tiedostosta. Näin näet TÄSTÄ mitkä muuttujat ovat
+# arkoja, ilman että arvot ovat selkokielisinä repossa.
+lure_hostname:               "{{ vault_lure_hostname }}"
+azure_subscription_id:       "{{ vault_azure_subscription_id }}"
+azure_resource_group:        "{{ vault_azure_resource_group }}"
+log_analytics_workspace_id:  "{{ vault_log_analytics_workspace_id }}"
+log_analytics_workspace_key: "{{ vault_log_analytics_workspace_key }}"
+psqladmin_password:          "{{ vault_psqladmin_password }}"
+psqluser_password:           "{{ vault_psqluser_password }}"
