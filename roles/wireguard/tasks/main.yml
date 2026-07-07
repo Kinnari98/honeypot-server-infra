@@ -1,6 +1,4 @@
-## tasks/*.yml
-
-
+---
 - name: Ensure private key (example task)
   copy:
     src: wg0.key
