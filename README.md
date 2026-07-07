@@ -101,6 +101,32 @@ git config core.hooksPath .githooks
 
 Tämän jälkeen jokainen `git commit` tarkistaa staged vault-tiedostot, ja jos jokin ei ala `$ANSIBLE_VAULT`-otsikolla, commit estyy. Suositellaan kaikille tiimin jäsenille.
 
+### 2d. Vault-tiedostojen lukeminen ja muokkaus
+
+Salattu tiedosto näkyy editorissa (VSCode ym.) pelkkänä salattuna möykkynä – se on normaalia. Sisältöön pääsee käsiksi `ansible-vault`-komennoilla (tarvitset vault-salasanan; jos `.vault_pass` on käytössä, salasanaa ei kysytä).
+
+| Komento | Mitä tekee | Turvallinen gitille |
+|---------|-----------|---------------------|
+| `ansible-vault view <tiedosto>` | Näyttää sisällön – **tiedosto pysyy salattuna levyllä** | ✅ kyllä |
+| `ansible-vault edit <tiedosto>` | Avaa editoriin, **salaa uudelleen** tallennettaessa | ✅ kyllä |
+| `ansible-vault decrypt <tiedosto>` | **Purkaa pysyvästi** – jättää selkokielisen tiedoston levylle | ⚠️ **EI** |
+
+```bash
+# Lue salaisuudet (tiedosto ei muutu):
+ansible-vault view inventory/group_vars/all/vault.yml
+
+# Muokkaa salaisuuksia (salautuu automaattisesti tallennuksessa):
+ansible-vault edit inventory/group_vars/all/vault.yml
+```
+
+> **Älä käytä `ansible-vault decrypt`** committoitaviin tiedostoihin – se jättää salaisuudet selkokielisenä levylle, ja seuraava commit vuotaisi ne. Käytä aina `view` (luku) tai `edit` (muokkaus). Pre-commit-hook (kohta 2c) toimii viimeisenä turvaverkkona, mutta älä luota pelkästään siihen.
+
+Vaihtaaksesi salauksen salasanan (esim. jos vault-salasana vuotaa):
+
+```bash
+ansible-vault rekey inventory/group_vars/all/vault.yml
+```
+
 ### 3. Admin-käyttäjät (ansible-vault)
 
 Oikeat ylläpitäjät luodaan `admins`-roolissa, jonka task-tiedosto on **ansible-vaultilla salattu** ja sellaisena versionhallinnassa. Tiedosto sisältää ylläpitäjien Linux-tunnukset ja SSH-julkiavaimet.
