@@ -23,3 +23,16 @@ log_analytics_workspace_id:  "{{ vault_log_analytics_workspace_id }}"
 log_analytics_workspace_key: "{{ vault_log_analytics_workspace_key }}"
 psqladmin_password:          "{{ vault_psqladmin_password }}"
 psqluser_password:           "{{ vault_psqluser_password }}"
+
+
+wg_port: "{{ wireguard_server_port }}"
+wg_network: "{{ wireguard_network }}"
+
+wg_server_address: "{{ wireguard_server_address }}"
+wg_admin1_allowed_ips: "{{ wireguard_admin1_allowed_ips }}"
+wg_admin2_allowed_ips: "{{ wireguard_admin2_allowed_ips }}"
+
+wg_server_private_key: "{{ wireguard_server_private_key }}"
+wg_admin1_public_key: "{{ wireguard_admin1_public_key }}"
+wg_admin2_public_key: "{{ wireguard_admin2_public_key }}"
+
