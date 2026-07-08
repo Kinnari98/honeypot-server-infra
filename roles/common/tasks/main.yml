@@ -104,7 +104,7 @@
     immediate: true
 
 # ── SSH ───────────────────────────────────────────────────────────────────────
-# Portti pysyy 22:ssa – pääsynhallinta hoidetaan Azure NSG:llä.
+# Portti 22 jää auki houkuttimeksi. Oikeat adminit rajataan WireGuard-subnettiin.
 
 - name: Remove root SSH login
   lineinfile:
@@ -112,6 +112,27 @@
     regexp: "^#?PermitRootLogin"
     line: "PermitRootLogin no"
   notify: Restart SSH
+
+# Oikeat adminit (admin_users, arvo vaultissa) saavat kirjautua VAIN
+# WireGuard-subnetistä. Muualta (julkinen 22) heidän autentikointinsa on pois
+# käytöstä → tunnus näkyy /etc/passwd:ssä mutta ei ole käytettävissä hyökkääjälle.
+# Houkutin-käyttäjiin (mimu, pela, psql*) tämä ei vaikuta → ne jäävät auki 22:een.
+# validate: sshd -t estää rikkinäisen configin (ei lukitse ketään ulos).
+- name: Restrict admin SSH logins to the WireGuard subnet
+  ansible.builtin.blockinfile:
+    path: /etc/ssh/sshd_config
+    marker: "# {mark} ANSIBLE MANAGED - admin SSH restriction"
+    insertafter: EOF
+    block: |
+      Match User {{ admin_users }} Address !{{ wireguard_network }}
+          PubkeyAuthentication no
+          PasswordAuthentication no
+          KbdInteractiveAuthentication no
+    validate: 'sshd -t -f %s'
+  notify: Restart SSH
+  when:
+    - admin_users is defined
+    - wireguard_network is defined
 
 # ── Auditd ────────────────────────────────────────────────────────────────────
 
