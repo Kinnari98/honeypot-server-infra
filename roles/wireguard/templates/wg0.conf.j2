@@ -1,17 +1,20 @@
-
-## WireGuard configuration file template (wg0.conf.j2)
-
+# WireGuard server config (wg0.conf)
+# Managed by Ansible - do not edit manually
+# Muuttujat: inventory/group_vars/all/vault.yml (salattu)
 
 [Interface]
-Address = {{ wg_server_address }}
-ListenPort = {{ wg_port }}
-PrivateKey = {{ wg_server_private_key }}
+Address = {{ wireguard_server_address }}
+ListenPort = {{ wireguard_server_port }}
+PrivateKey = {{ wireguard_server_private_key }}
+{% if wireguard_admin1_public_key %}
 
 [Peer]
-PublicKey = {{ wg_admin1_public_key }}
-AllowedIPs = {{ wg_admin1_allowed_ips }}/32
+PublicKey = {{ wireguard_admin1_public_key }}
+AllowedIPs = {{ wireguard_admin1_allowed_ips }}/32
+{% endif %}
+{% if wireguard_admin2_public_key %}
 
 [Peer]
-PublicKey = {{ wg_admin2_public_key }}
-AllowedIPs = {{ wg_admin2_allowed_ips }}/32  
-
+PublicKey = {{ wireguard_admin2_public_key }}
+AllowedIPs = {{ wireguard_admin2_allowed_ips }}/32
+{% endif %}

@@ -1,13 +1,8 @@
 ---
-- name: Ensure private key (example task)
-  copy:
-    src: wg0.key
-    dest: /etc/wireguard/wg0.key
-    owner: root
-    group: root
-    mode: '0600'
-  notify:
-    - restart wireguard
+- name: Install WireGuard
+  dnf:
+    name: wireguard-tools
+    state: present
 
 - name: Create Wireguard directory
   file:
@@ -16,16 +11,6 @@
     owner: root
     group: root
     mode: '0700'
-
-- name: Enable WireGuard service
-  service:
-    name: wg-quick@wg0
-    enabled: true
-
-- name: Start WireGuard
-  service:
-    name: wg-quick@wg0
-    state: started
 
 - name: Deploy WireGuard configuration
   template:
@@ -36,3 +21,9 @@
     mode: '0600'
   notify:
     - restart wireguard
+
+- name: Enable and start WireGuard
+  service:
+    name: wg-quick@wg0
+    enabled: true
+    state: started

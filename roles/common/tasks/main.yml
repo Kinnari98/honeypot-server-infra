@@ -95,6 +95,14 @@
     chain: OUTPUT
     policy: DROP
 
+- name: Firewalld - Open port 51820 for WireGuard
+  firewalld:
+    zone: drop
+    port: "{{ wireguard_server_port }}/udp"
+    state: enabled
+    permanent: true
+    immediate: true
+
 # ── SSH ───────────────────────────────────────────────────────────────────────
 # Portti pysyy 22:ssa – pääsynhallinta hoidetaan Azure NSG:llä.
 
