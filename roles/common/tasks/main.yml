@@ -107,10 +107,18 @@
     state: started
     enabled: true
 
+# Tila tarkistetaan etukäteen sen sijaan että jäsennettäisiin komennon tulostetta:
+# firewall-cmd kirjoittaa "Warning: ZONE_ALREADY_SET" stderriin ja "success"
+# stdoutiin, joten stdoutista etsivä changed_when ei osu koskaan ja taski
+# raportoi muutoksen joka ajolla.
+- name: Firewalld – hae nykyinen oletuszone
+  command: firewall-cmd --get-default-zone
+  register: current_zone
+  changed_when: false
+
 - name: Firewalld – aseta drop oletuszoneksi (deny all inbound)
   command: firewall-cmd --set-default-zone=drop
-  register: zone_result
-  changed_when: "'already set' not in zone_result.stdout"
+  when: current_zone.stdout | trim != 'drop'
 
 # honeypot_open_ports on AUKTORITATIIVINEN: se kertoo mitkä portit ovat auki,
 # ei pelkästään mitä lisätään. Ilman alla olevaa sovitustaskia firewalld-moduuli
