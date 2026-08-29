@@ -1,55 +1,204 @@
-Just storing some queries here
-
-Syslog
-| where TimeGenerated > ago(14d)
-| where ProcessName == "auditd:" or ProcessName == "auth:"
-| where SyslogMessage has "AAAAB3NzaC1yc2EAAAABJQAAAQEArDp4cun2lhr4KUhBGE7VvAcwdli2a8dbnrTOrbMz1"
-// case_sensitive = true on oletus KQL:ssä has-operaattorille ei ole, käytetään contains_cs
-| where SyslogMessage contains_cs "AAAAB3NzaC1yc2EAAAABJQAAAQEArDp4cun2lhr4KUhBGE7VvAcwdli2a8dbnrTOrbMz1"
-| extend
-    src_ip  = extract(@"(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})", 1, SyslogMessage),
-    uid     = extract(@"uid=(\d+)", 1, SyslogMessage)
-| project TimeGenerated, src_ip, uid, SyslogMessage
-| extend AlertTitle = strcat("🔴 TUNNETTU SSH-AVAIN istutettu IP:ltä ", src_ip)
+# Sentinel-kyselyt – honeypot-server-infra
+#
+# TESTAAMATTOMIA. Nämä on kirjoitettu tunnettua datamallia vasten, mutta
+# kenttien tarkat arvot (erityisesti USER_LOGIN-tietueiden muoto) on
+# varmistettava oikealla datalla ennen kuin niistä tehdään hälytyssääntöjä.
+#
+# ── DATAMALLI ────────────────────────────────────────────────────────────────
+#
+# Kaikki menee Syslog-tauluun, EI CommonSecurityLog-tauluun.
+#
+#   Facility == "local6"   auditd (audisp-syslog), ProcessName == "audispd"
+#   Facility == "local0"   PostgreSQL, ProcessName == "postgres"
+#   Facility == "authpriv" sshd – kirjautumiset ja epäonnistuneet salasanat
+#
+# Auditd-sääntöjen -k-tagi näkyy SyslogMessage-kentässä muodossa key="<tagi>".
+# Tagit: roles/common/templates/audit.rules.j2
+#
+# HUOM avaimista: ssh_key_injection koskee VAIN /root/.ssh:ta. Houkutin-
+# käyttäjien kotihakemistot ovat -w /home -säännön alla ja saavat tagin
+# home_dir_changes. Hyökkääjä tulee sisään houkutintunnuksella, joten
+# authorized_keys-havainnon on katettava molemmat.
+#
+# HUOM lähde-IP:stä: audit-tiedostotapahtumassa EI ole verkko-osoitetta.
+# Se on korreloitava kirjautumistapahtumasta auid-kentän kautta.
+#
+# HUOM kertoimesta: yksi audit-tapahtuma tuottaa useita rivejä (SYSCALL, PATH,
+# CWD, PROCTITLE, EOE), jotka jakavat saman audit(...)-tunnisteen. Laskennassa
+# kannattaa yleensä laskea tapahtumia eikä rivejä.
 
 
 // ============================================================
-// SÄÄNTÖ 2: Yleinen SSH-avainistutus (pattern)
-// Severity: High | Frequency: 5min | Period: 1h
-// MITRE: T1098.004 – SSH Authorized Keys
+// ORIENTAATIO 1: Mitä dataa oikeasti tulee?
+// Aja tämä ensin aina kun jokin ei toimi odotetusti.
 // ============================================================
 Syslog
 | where TimeGenerated > ago(1h)
-| where ProcessName == "auditd:"
-| extend Event   = parse_json(extract(@"\{.*\}", 0, SyslogMessage))
-| extend eventid = tostring(Event.eventid)
-| extend input   = tostring(Event.input)
-| extend src_ip  = tostring(Event.src_ip)
-// Cowrie: tunnistaa komennon suoraan
-| where (
-    eventid == "cowrie.command.input"
-    and (
-        input has "authorized_keys"
-        or input has "chattr -ia .ssh"
-        or (input has "mkdir" and input has ".ssh")
-        or (input has "echo" and input has "ssh-rsa")
-        or (input has "echo" and input has "ssh-ed25519")
-    )
-)
-// Auditd: tunnistaa tiedostokirjoituksen oikealla palvelimella
-or (
-    ProcessName == "auditd:"
-    and SyslogMessage has "authorized_keys"
-    and SyslogMessage has_any ("WRITE", "CREATE", "open")
-)
-| extend AttackChain = case(
-    input has "chattr -ia .ssh",                        "Vaihe 1: Immutable-lipun poisto",
-    input has "rm -rf .ssh",                            "Vaihe 2: .ssh-hakemiston tyhjennys",
-    input has "mkdir" and input has ".ssh",             "Vaihe 3: .ssh-hakemiston luonti",
-    input has "authorized_keys" and input has "echo",   "Vaihe 4: SSH-avaimen istutus",
-    input has "authorized_keys",                        "Vaihe 4: authorized_keys muokattu",
-    "Tuntematon vaihe"
-  )
-| project TimeGenerated, src_ip, AttackChain, input, SyslogMessage
-| extend AlertTitle = strcat("🟠 SSH-avainistutus havaittu – ", AttackChain, " – IP: ", src_ip)
+| summarize Rivit = count() by Facility, SeverityLevel, ProcessName
+| order by Rivit desc
+
+
+// ============================================================
+// ORIENTAATIO 2: Mitkä audit-säännöt tuottavat volyymin?
+// Kustannusten kohdentamiseen ja sääntöjen virittämiseen.
+// ============================================================
+Syslog
+| where TimeGenerated > ago(24h)
+| where Facility == "local6"
+| extend Key = extract(@'key="([^"]+)"', 1, SyslogMessage)
+| where isnotempty(Key)
+| summarize Tapahtumia = count() by Key
+| order by Tapahtumia desc
+
+
+// ============================================================
+// SÄÄNTÖ 1: SSH-avaimen istutus
+// Severity: High | Frequency: 5 min | Period: 1 h
+// MITRE: T1098.004 – Account Manipulation: SSH Authorized Keys
+//
+// Kattaa sekä /root/.ssh (ssh_key_injection) että käyttäjien kotihakemistot
+// (home_dir_changes). Tämä on honeypotin tärkein yksittäinen havainto:
+// se tarkoittaa että hyökkääjä on saanut shellin ja rakentaa pysyvää pääsyä.
+// ============================================================
+Syslog
+| where TimeGenerated > ago(1h)
+| where Facility == "local6"
+| where SyslogMessage has "authorized_keys"
+| extend
+    Key   = extract(@'key="([^"]+)"', 1, SyslogMessage),
+    Auid  = extract(@"auid=(\d+)", 1, SyslogMessage),
+    Uid   = extract(@"\buid=(\d+)", 1, SyslogMessage),
+    Comm  = extract(@'comm="([^"]+)"', 1, SyslogMessage),
+    Exe   = extract(@'exe="([^"]+)"', 1, SyslogMessage),
+    Polku = extract(@'name="([^"]+)"', 1, SyslogMessage)
+| where Key in ("ssh_key_injection", "home_dir_changes")
+| project TimeGenerated, Computer, Key, Auid, Uid, Comm, Exe, Polku, SyslogMessage
+| extend AlertTitle = strcat("SSH-avaimen istutus havaittu: ", Polku, " (auid=", Auid, ")")
+
+
+// ============================================================
+// SÄÄNTÖ 2: SSH-avaimen istutus + hyökkääjän lähde-IP
+// Sama havainto kuin sääntö 1, mutta korreloituna kirjautumiseen.
+//
+// Audit-tiedostotapahtumassa ei ole IP-osoitetta. auditd kirjaa kirjautumiset
+// erikseen USER_LOGIN-tietueina, joissa on addr-kenttä. Yhdistetään auid:n
+// kautta: auid on kirjautumisen alkuperäinen käyttäjä ja se säilyy sudon ja
+// su:n läpi, joten se seuraa hyökkääjää myös root-eskalaation jälkeen.
+//
+// Kenttämuoto varmistettu oikealla datalla RHEL 10 / auditd:llä:
+//   auid=1000 ... msg='op=login id=1000 ... addr=91.159.12.156 ... res=success'
+//   UID="root" AUID="azureuser" ID="azureuser"
+// Huomaa ettei tietueessa ole acct-kenttää – tunnus luetaan AUID-kentästä.
+// ============================================================
+let Kirjautumiset =
+    Syslog
+    | where TimeGenerated > ago(24h)
+    | where Facility == "local6"
+    | where SyslogMessage has "type=USER_LOGIN"
+    | extend
+        Auid   = extract(@"auid=(\d+)", 1, SyslogMessage),
+        LahdeIP = extract(@'addr=([\d\.]+)', 1, SyslogMessage),
+        Tunnus = extract(@'AUID="([^"]+)"', 1, SyslogMessage),
+        Tulos  = extract(@"res=(\w+)", 1, SyslogMessage)
+    | where Tulos == "success" and isnotempty(LahdeIP)
+    | summarize KirjautumisAika = max(TimeGenerated) by Auid, LahdeIP, Tunnus;
+Syslog
+| where TimeGenerated > ago(1h)
+| where Facility == "local6"
+| where SyslogMessage has "authorized_keys"
+| extend
+    Key   = extract(@'key="([^"]+)"', 1, SyslogMessage),
+    Auid  = extract(@"auid=(\d+)", 1, SyslogMessage),
+    Polku = extract(@'name="([^"]+)"', 1, SyslogMessage)
+| where Key in ("ssh_key_injection", "home_dir_changes")
+| join kind=leftouter Kirjautumiset on Auid
+| project TimeGenerated, Computer, Polku, Tunnus, LahdeIP, KirjautumisAika, Key
+| extend AlertTitle = strcat("SSH-avaimen istutus – tunnus ", Tunnus, ", IP ", LahdeIP)
+
+
+// ============================================================
+// SÄÄNTÖ 3: Tunnettu hyökkääjän avain (IOC)
+// Severity: High | Frequency: 5 min | Period: 24 h
+//
+// Aiemmin havaittu julkinen avain. Kun näitä kertyy useampi, siirrä ne
+// Sentinelin watchlistiin ja tee lookup – älä kasvata kovakoodattua listaa
+// kyselyssä.
+// ============================================================
+let TunnetutAvaimet = dynamic([
+    "AAAAB3NzaC1yc2EAAAABJQAAAQEArDp4cun2lhr4KUhBGE7VvAcwdli2a8dbnrTOrbMz1"
+]);
+Syslog
+| where TimeGenerated > ago(24h)
+| where Facility == "local6"
+| where SyslogMessage has_any (TunnetutAvaimet)
+| extend Auid = extract(@"auid=(\d+)", 1, SyslogMessage)
+| project TimeGenerated, Computer, Auid, SyslogMessage
+| extend AlertTitle = "TUNNETTU hyokkaajan SSH-avain havaittu"
+
+
+// ============================================================
+// SÄÄNTÖ 4: Oikeuksien eskalointi
+// Severity: Medium | Frequency: 10 min | Period: 1 h
+// MITRE: T1548 – Abuse Elevation Control Mechanism
+//
+// Honeypotilla sudo/su/pkexec-ajot ovat lähtökohtaisesti kiinnostavia, koska
+// yhdenkään houkutintunnuksen ei pitäisi tehdä ylläpitotoimia.
+// ============================================================
+Syslog
+| where TimeGenerated > ago(1h)
+| where Facility == "local6"
+| where SyslogMessage has 'key="priv_escalation"'
+| extend
+    Auid = extract(@"auid=(\d+)", 1, SyslogMessage),
+    Comm = extract(@'comm="([^"]+)"', 1, SyslogMessage),
+    Exe  = extract(@'exe="([^"]+)"', 1, SyslogMessage)
+| summarize Kertaa = count(), Viimeksi = max(TimeGenerated) by Auid, Comm, Exe, Computer
+| order by Kertaa desc
+
+
+// ============================================================
+// SÄÄNTÖ 5: Komentohistoria – mitä hyökkääjä ajoi
+// Ei hälytys vaan tutkintakysely. Aja kun jokin sääntö on lauennut.
+//
+// EXECVE-tietue sisältää komennon argumentteineen. Suodata auid:lla
+// keskittyäksesi yhteen istuntoon.
+// ============================================================
+Syslog
+| where TimeGenerated > ago(24h)
+| where Facility == "local6"
+| where SyslogMessage has "type=EXECVE"
+| extend Komento = extract(@"type=EXECVE msg=audit\([^)]+\): (.+)$", 1, SyslogMessage)
+| project TimeGenerated, Computer, Komento
+| order by TimeGenerated asc
+
+
+// ============================================================
+// SÄÄNTÖ 6: Tietokannan tutkiminen
+// Severity: Medium | Frequency: 15 min | Period: 1 h
+//
+// Kanta on houkutin: sinne pääsee vasta shellin saatuaan. Mikä tahansa
+// kysely muulta kuin backup-skriptiltä tarkoittaa että joku on sisällä.
+// Sulje pois omat testikyselysi ennen kuin teet tästä hälytyksen.
+// ============================================================
+Syslog
+| where TimeGenerated > ago(1h)
+| where Facility == "local0"
+| where SyslogMessage has "statement:"
+| extend
+    Kysely   = extract(@"statement:\s*(.+)$", 1, SyslogMessage),
+    Kayttaja = extract(@"user=(\w+)", 1, SyslogMessage),
+    Asiakas  = extract(@"client=(\S+)", 1, SyslogMessage)
+| where Kysely !startswith "SELECT 1"
+| project TimeGenerated, Computer, Kayttaja, Asiakas, Kysely
+
+
+// ============================================================
+// KUSTANNUSSEURANTA
+// Aja säännöllisesti, erityisesti honeypotin avaamisen jälkeen.
+// Perustaso viritetyllä tyhjäkäynnillä: suuruusluokkaa 0,05–0,08 GB/vrk.
+// ============================================================
+Usage
+| where TimeGenerated > ago(7d)
+| where DataType == "Syslog"
+| summarize GB = sum(Quantity) / 1024 by bin(TimeGenerated, 1d)
 | order by TimeGenerated asc
