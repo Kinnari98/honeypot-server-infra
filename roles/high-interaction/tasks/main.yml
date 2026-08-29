@@ -35,6 +35,10 @@
   ansible.builtin.lineinfile:
     path: /etc/ssh/sshd_config
     regexp: '^#?Banner'
+    # Match-lohkon jälkeen tuleva rivi kuuluisi siihen lohkoon. common-rooli
+    # lisää admin-rajoituksen Match-lohkon tiedoston loppuun, joten uusi rivi
+    # on pakotettava sen yläpuolelle jos regexp ei löydä olemassa olevaa.
+    insertbefore: '^Match '
     line: 'Banner /etc/issue.net'
   notify: Restart sshd
   become: true
@@ -43,6 +47,10 @@
   ansible.builtin.lineinfile:
     path: /etc/ssh/sshd_config
     regexp: '^#?PrintMotd'
+    # Match-lohkon jälkeen tuleva rivi kuuluisi siihen lohkoon. common-rooli
+    # lisää admin-rajoituksen Match-lohkon tiedoston loppuun, joten uusi rivi
+    # on pakotettava sen yläpuolelle jos regexp ei löydä olemassa olevaa.
+    insertbefore: '^Match '
     line: 'PrintMotd yes'
   notify: Restart sshd
   become: true

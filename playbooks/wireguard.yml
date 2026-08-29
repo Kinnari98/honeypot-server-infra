@@ -1,0 +1,9 @@
+## playbooks/wireguard.yml
+
+- name: WireGuard
+  hosts: machines
+  become: true
+
+  roles:
+    - role: wireguard
+      tags: [wireguard]
