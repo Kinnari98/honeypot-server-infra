@@ -5,8 +5,11 @@
 ## vars.yml viittaa niihin vault_-etuliitteellä.
 
 # ─── Ei-arka konfiguraatio (turvallista julkaista) ────────────────────────────
+# Sisäänpäin sallitut portit. Yksi mekanismi kaikille avauksille – älä lisää
+# erillisiä firewalld-taskeja common-rooliin.
 honeypot_open_ports:
   - { port: 22, proto: "tcp", name: "SSH" }
+  - { port: "{{ wireguard_server_port }}", proto: "udp", name: "WireGuard" }
 
 # Sysmon for Linux. Pois käytöstä koska NSG-sääntö DenyInternetOut estää pääsyn
 # packages.microsoft.comiin – paketti ei ole asennettavissa. Kun tämä on false,
@@ -32,3 +35,8 @@ log_analytics_workspace_id:  "{{ vault_log_analytics_workspace_id }}"
 log_analytics_workspace_key: "{{ vault_log_analytics_workspace_key }}"
 psqladmin_password:          "{{ vault_psqladmin_password }}"
 psqluser_password:           "{{ vault_psqluser_password }}"
+
+# WireGuard-muuttujat (wireguard_*) tulevat suoraan vault.yml:stä.
+# Template roles/wireguard/templates/wg0.conf.j2 viittaa niihin suoraan –
+# ei erillistä wg_-välikerrosta täällä.
+
