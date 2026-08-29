@@ -85,8 +85,10 @@ Syslog
 // kautta: auid on kirjautumisen alkuperäinen käyttäjä ja se säilyy sudon ja
 // su:n läpi, joten se seuraa hyökkääjää myös root-eskalaation jälkeen.
 //
-// VARMISTA: tarkista USER_LOGIN-tietueen kenttänimet oikealla datalla ennen
-// käyttöä – muoto vaihtelee auditd-versioittain.
+// Kenttämuoto varmistettu oikealla datalla RHEL 10 / auditd:llä:
+//   auid=1000 ... msg='op=login id=1000 ... addr=91.159.12.156 ... res=success'
+//   UID="root" AUID="azureuser" ID="azureuser"
+// Huomaa ettei tietueessa ole acct-kenttää – tunnus luetaan AUID-kentästä.
 // ============================================================
 let Kirjautumiset =
     Syslog
@@ -96,7 +98,7 @@ let Kirjautumiset =
     | extend
         Auid   = extract(@"auid=(\d+)", 1, SyslogMessage),
         LahdeIP = extract(@'addr=([\d\.]+)', 1, SyslogMessage),
-        Tunnus = extract(@'acct="([^"]+)"', 1, SyslogMessage),
+        Tunnus = extract(@'AUID="([^"]+)"', 1, SyslogMessage),
         Tulos  = extract(@"res=(\w+)", 1, SyslogMessage)
     | where Tulos == "success" and isnotempty(LahdeIP)
     | summarize KirjautumisAika = max(TimeGenerated) by Auid, LahdeIP, Tunnus;
