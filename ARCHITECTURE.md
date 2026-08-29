@@ -252,6 +252,32 @@ Säännöt on jaettu kategorioihin (`audit.rules.j2`):
 
 **Lokitusinfrastruktuuri on suljettava pois.** Sääntötiedosto alkaa `never,exit`-säännöillä, jotka poistavat auditoinnista `rsyslogd`, `auditd` ja `systemd-journald` (`audit_exclude_exe`). Ilman niitä syntyy takaisinkytkentä: rsyslog kirjoittaa tilatiedostonsa uudelleennimeämällä, se osuu `file_deletion`-sääntöön, syntyvä audit-tapahtuma kulkee rsyslogin läpi ja aiheuttaa uuden kirjoituksen. Mitattu tyhjäkäyntitaso ennen korjausta oli **~340 riviä sekunnissa eli ~15 GB vuorokaudessa** koneella jossa ei ollut ketään – pelkkää itse tuotettua kohinaa. Poissulkemisten on oltava ennen `always,exit`-sääntöjä, koska kernel käy exit-suodattimen läpi järjestyksessä ja ensimmäinen osuma ratkaisee.
 
+### Volyymin viritys
+
+Auditd tuottaa oletusasetuksilla enemmän dataa kuin honeypotin kokoinen kone kestää, ja Sentinel-ingestio maksaa jokaisesta rivistä. Tyhjäkäyntitaso on viritetty mitaten, ei arvaten:
+
+| Vaihe | Riviä/min | GB/vrk |
+|---|---|---|
+| Lähtötilanne | ~20 000 | ~15 |
+| `never`-säännöt lokitusinfralle | 406 | ~0,3 |
+| AMA asennettu | 3 364 | ~2,4 |
+| `auid`-suodatin verkkosääntöihin | 2 718 | ~2,0 |
+| `auid`-suodatin `file_deletion`iin | **151** | **~0,1** |
+
+Kaksi asiaa tekee virityksestä epäintuitiivista.
+
+**Kerroin.** Yksi audit-tapahtuma tuottaa syslogiin noin kuusi riviä: `SYSCALL`, `PATH`, `CWD`, `PROCTITLE` ja `EOE`. Yhden tapahtuman poistaminen poistaa siis kuusi riviä ingestiosta, ja tapahtumamäärää tuijottamalla saa väärän kuvan kustannuksesta.
+
+**Lähde ei ole se miltä näyttää.** AMA:n asennuksen jälkeen `file_deletion` tuotti 799 tapahtumaa kahdessa minuutissa, joista 778 oli agentin omaa lokinkierrätystä – 97 % säännöstä ja 53 % kaikista tapahtumista. Verkkosääntöjen suodattaminen tuntui ilmeiseltä korjaukselta mutta pudotti volyymia vain 19 %. Oikea sääntö löytyi vasta kysymällä auditd:ltä avainjakauma:
+
+```bash
+journalctl SYSLOG_FACILITY=22 --since "-2 min" | tr " " "\n" | grep ^key= | sort | uniq -c | sort -rn
+```
+
+`auid`-suodattimet (`audit_network_user_only`, `audit_file_deletion_user_only`) rajaavat säännöt käyttäjälähtöiseen toimintaan. Järjestelmädemonit ajavat `auid=unset`-tilassa, hyökkääjä SSH:n kautta ei – ja `auid` säilyy `sudo`n ja `su`:n läpi, joten myös root-oikeuksin tehty toiminta kirjautuu. Suodatin on kestävämpi kuin binäärien luettelointi `audit_exclude_exe`-listaan, koska agentit päivittävät itseään ja polut vanhenevat hiljaisesti.
+
+**`process_execution` on tarkoituksella suodattamatta.** Se on honeypotin arvokkain sääntö – jokainen hyökkääjän ajama komento. `auid`-suodatin poistaisi cronin ja systemd:n kautta ajetut prosessit, eli juuri sen mitä hyökkääjän asentama persistenssi tuottaa. Jos volyymia on pakko karsia lisää, `log_tampering`- ja `binary_tampering`-watch-säännöistä on halvempi luopua kuin komentohistoriasta.
+
 **Syscall-nimet ovat tarkkoja.** `accept4` ja `renameat2` on lisättävä erikseen, koska moderni glibc ja coreutils käyttävät niitä vanhempien tilalla: ilman `accept4`:ää saapuvat SSH-yhteydet eivät osu `network_activity`-sääntöön lainkaan, ja ilman `renameat2`:ta `mv`-komennolla tehty jälkien siivous jää kirjaamatta.
 
 ### Sääntöjen lukitus ja sen hinta

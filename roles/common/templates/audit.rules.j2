@@ -119,14 +119,18 @@
 ## koska auditctl pysähtyy ensimmäiseen virheeseen, KAIKKI sen jälkeen tulevat
 ## säännöt jäävät lataamatta, myös lopun -e 2. Tarkista uudet syscall-nimet
 ## ennen lisäämistä:  ausyscall i386 <nimi>  ja  ausyscall x86_64 <nimi>
--a always,exit -F arch=b64 -S socket  -k network_activity
--a always,exit -F arch=b64 -S connect -k network_activity
--a always,exit -F arch=b64 -S accept  -S accept4 -k network_activity
--a always,exit -F arch=b64 -S bind    -k network_activity
--a always,exit -F arch=b32 -S socket  -k network_activity
--a always,exit -F arch=b32 -S connect -k network_activity
--a always,exit -F arch=b32 -S accept4 -k network_activity
--a always,exit -F arch=b32 -S bind    -k network_activity
+##
+## auid-suodatin rajaa nämä käyttäjälähtöiseen toimintaan. Muuttuja:
+## roles/common/defaults/main.yml -> audit_network_user_only
+{% if audit_network_user_only %}{% set uf = ' -F auid>=1000 -F auid!=4294967295' %}{% else %}{% set uf = '' %}{% endif %}
+-a always,exit -F arch=b64 -S socket{{ uf }} -k network_activity
+-a always,exit -F arch=b64 -S connect{{ uf }} -k network_activity
+-a always,exit -F arch=b64 -S accept -S accept4{{ uf }} -k network_activity
+-a always,exit -F arch=b64 -S bind{{ uf }} -k network_activity
+-a always,exit -F arch=b32 -S socket{{ uf }} -k network_activity
+-a always,exit -F arch=b32 -S connect{{ uf }} -k network_activity
+-a always,exit -F arch=b32 -S accept4{{ uf }} -k network_activity
+-a always,exit -F arch=b32 -S bind{{ uf }} -k network_activity
 
 ## ══════════════════════════════════════════════════════════════════════════════
 ## KERNEL-MODUULIT – rootkit-havaitseminen
@@ -193,8 +197,12 @@
 ## ══════════════════════════════════════════════════════════════════════════════
 ## renameat2 on mukana koska moderni coreutils (mv) käyttää sitä – ilman sitä
 ## jälkien siivoaminen uudelleennimeämällä jää kirjaamatta.
--a always,exit -F arch=b64 -S unlink -S unlinkat -S rename -S renameat -S renameat2 -k file_deletion
--a always,exit -F arch=b32 -S unlink -S unlinkat -S rename -S renameat -S renameat2 -k file_deletion
+##
+## auid-suodatin: ks. audit_file_deletion_user_only defaults/main.yml:ssä.
+## Ilman sitä AMA:n oma lokinkierrätys tuotti 97 % tämän säännön tapahtumista.
+{% if audit_file_deletion_user_only %}{% set df = ' -F auid>=1000 -F auid!=4294967295' %}{% else %}{% set df = '' %}{% endif %}
+-a always,exit -F arch=b64 -S unlink -S unlinkat -S rename -S renameat -S renameat2{{ df }} -k file_deletion
+-a always,exit -F arch=b32 -S unlink -S unlinkat -S rename -S renameat -S renameat2{{ df }} -k file_deletion
 
 ## ══════════════════════════════════════════════════════════════════════════════
 ## LUKITSE SÄÄNNÖT – estä auditd:n poistaminen käytöstä

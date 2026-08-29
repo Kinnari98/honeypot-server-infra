@@ -114,3 +114,36 @@ audit_exclude_exe:
   - /usr/sbin/rsyslogd
   - /usr/sbin/auditd
   - /usr/lib/systemd/systemd-journald
+
+# Rajaa verkkosäännöt (socket/connect/accept4/bind) käyttäjälähtöiseen
+# toimintaan suodattamalla auid:n perusteella.
+#
+# Järjestelmädemonit – AMA, rsyslog, chronyd – ajavat auid=unset-tilassa ja
+# tuottavat jatkuvaa socket-kohinaa. AMA on erityistapaus: se avaa socketin
+# lähettääkseen audit-tapahtumia, mikä synnyttää lisää audit-tapahtumia.
+# Binäärien luettelointi audit_exclude_exe-listaan ei auta pitkään, koska
+# agentti päivittää itseään ja polut muuttuvat hiljaisesti.
+#
+# Hyökkääjä sen sijaan tulee sisään SSH:lla, jolloin auid on asetettu – ja se
+# säilyy sudon ja su:n läpi. Verkkotelemetria hyökkääjästä siis säilyy.
+#
+# Hinta: cronin tai systemd:n kautta ajettu hyökkääjän persistenssi ajetaan
+# auid=unset-tilassa, jolloin sen verkkoyhteydet jäävät kirjaamatta. Prosessin
+# käynnistys näkyy silti process_execution-säännössä, jota tämä ei koske.
+audit_network_user_only: true
+
+# Sama suodatin file_deletion-säännölle (unlink/rename), samasta syystä.
+#
+# Mitattu jakauma AMA:n asennuksen jälkeen: file_deletion tuotti 799 tapahtumaa
+# kahdessa minuutissa, joista 778 oli AMA:n omaa lokinkierrätystä
+# /var/opt/microsoft/azuremonitoragent/log/-hakemistossa – 97 % säännöstä ja
+# 53 % kaikista audit-tapahtumista. Takaisinkytkentä on sama kuin rsyslogilla:
+# agentti kirjoittaa lokia, siitä syntyy audit-tapahtuma, jonka agentti lähettää.
+#
+# Kerroin on merkittävä: yksi audit-tapahtuma tuottaa syslogiin noin kuusi riviä
+# (SYSCALL, PATH, CWD, PROCTITLE, EOE), joten yksi poistettu tapahtuma poistaa
+# kuusi riviä ingestiosta.
+#
+# Hinta: hyökkääjän cron-ajastettu jälkien siivous jää kirjaamatta. Vuorovaikut-
+# teinen siivous – se arvokas tapaus – näkyy, koska auid säilyy SSH-kirjautumisesta.
+audit_file_deletion_user_only: true
