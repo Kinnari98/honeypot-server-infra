@@ -8,6 +8,12 @@
 honeypot_open_ports:
   - { port: 22, proto: "tcp", name: "SSH" }
 
+# Sysmon for Linux. Pois käytöstä koska NSG-sääntö DenyInternetOut estää pääsyn
+# packages.microsoft.comiin – paketti ei ole asennettavissa. Kun tämä on false,
+# common-rooli siivoaa tavoittamattoman Microsoft-repon pois, jotta dnf toimii.
+# Ks. roles/monitoring/defaults/main.yml.
+monitoring_enabled: false
+
 azure_location: "swedencentral"
 azure_vm_size:  "Standard_B1ms"
 azure_vm_image: "Canonical:ubuntu-24_04-lts:server:latest"

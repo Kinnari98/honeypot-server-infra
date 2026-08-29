@@ -1,0 +1,39 @@
+---
+## roles/common/defaults/main.yml
+## Common-roolin oletusmuuttujat. Voi ylikirjoittaa group_vars/host_vars-tasolla.
+
+# ── Käytöstä poistettavat dnf-repot ───────────────────────────────────────────
+# "dnf update" parametrilla name:"*" vaatii KAIKKIEN käytössä olevien repojen
+# metadatan. Yksikin tavoittamaton repo kaataa siis common-roolin ensimmäisen
+# taskin ja koko deployn – riippumatta siitä tarvitaanko repoa mihinkään.
+#
+# codeready-builder: RHEL 10.2:lle ei ole julkaistu RHUI-sisältöä polkuun
+# .../rhel10/rhui/$releasever/$arch/codeready-builder/os, joten repo on
+# tavoittamaton. Kyse ei ole verkosta – muut repot tulevat samalta palvelimelta
+# (rhui4-1.microsoft.com) ja toimivat. CodeReady Builder on kehityspakettien
+# repo, RHEL:llä oletuksena pois käytöstä, eikä honeypot tarvitse sitä.
+#
+# Poisto tehdään suoraan repotiedostoon, ei "dnf config-manager" -komennolla:
+# RHEL 10 käyttää DNF5:tä, jossa syntaksi on eri kuin DNF4:ssä.
+dnf_disabled_repos:
+  - file: /etc/yum.repos.d/rh-cloud-base.repo
+    repo: codeready-builder-for-rhel-10-rhui-rpms
+
+# ── Pakettien hallinta ────────────────────────────────────────────────────────
+# false = ohita sekä "Update packages" että "Install basic packages".
+#
+# Miksi tämä on olemassa: NSG-sääntö DenyInternetOut estää pääsyn Azuren
+# RHUI-endpointeihin (rhui4-1.microsoft.com → julkinen osoite), joten dnf ei
+# saa metadataa MISTÄÄN reposta. Silloin yksikään dnf-taski ei toimi, edes
+# state: present jo asennetuille paketeille, ja koko common-rooli jää jumiin.
+#
+# Turvakonfiguraation vieminen (auditd, firewalld, lokitus) ei kuitenkaan
+# oikeasti riipu pakettipäivityksistä. Tämä lippu erottaa ne toisistaan:
+#   ansible-playbook playbooks/deploy.yml -e package_management_enabled=false
+#
+# VAROITUS: ohittaminen on turvallista VAIN jos peruspaketit (firewalld, audit,
+# audispd-plugins, rsyslog, postgresql-server, python3-psycopg2) ovat jo
+# asennettuina. Uudella palvelimella deploy hajoaa myöhemmissä rooleissa.
+# Tämä on väliaikainen kiertotie, ei ratkaisu – ks. ARCHITECTURE.md.
+package_management_enabled: true
+

@@ -1,9 +1,69 @@
 ---
+# ── Repojen siivous ───────────────────────────────────────────────────────────
+# TÄMÄN LOHKON ON OLTAVA ENNEN MITÄÄN dnf-TASKIA, myös ennen "Update packages".
+#
+# dnf lataa kaikkien KÄYTÖSSÄ olevien repojen metadatan ennen mitä tahansa
+# operaatiota – myös ennen paketin poistoa. Yksikin tavoittamaton repo kaataa
+# siis koko deployn, riippumatta siitä tarvitaanko repoa mihinkään. Siksi
+# kaikki korjaukset tehdään puhtaina tiedosto-operaatioina (file, ini_file),
+# eikä yhtään dnf-kutsua saa olla ennen kuin repot ovat kunnossa.
+#
+# Kaksi tavoittamatonta repoa:
+#
+#   packages.microsoft.com – NSG-sääntö DenyInternetOut estää pääsyn julkiseen
+#   internetiin. Rajoitus on tarkoituksellinen ja honeypotin tärkein
+#   turvakontrolli, joten repo poistetaan sen sijaan että se avattaisiin.
+#   Seuraus: Sysmon ei ole asennettavissa (monitoring_enabled: false).
+#
+#   codeready-builder – RHEL 10.2:lle ei ole julkaistu RHUI-sisältöä. Kyse ei
+#   ole verkosta: muut repot tulevat samalta palvelimelta ja toimivat.
+#   Kehityspakettien repo, jota honeypot ei tarvitse.
+
+- name: Poista tavoittamattomat Microsoft-repotiedostot
+  file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /etc/yum.repos.d/microsoft-prod.repo
+    - /etc/yum.repos.d/packages-microsoft-com-prod.repo
+    - /etc/yum.repos.d/prod.repo
+  when: not monitoring_enabled
+
+- name: Tarkista käytöstä poistettavien repojen tiedostot
+  stat:
+    path: "{{ item.file }}"
+  loop: "{{ dnf_disabled_repos }}"
+  loop_control:
+    label: "{{ item.repo }}"
+  register: disabled_repo_files
+
+- name: Poista tavoittamattomat repot käytöstä
+  community.general.ini_file:
+    path: "{{ item.item.file }}"
+    section: "{{ item.item.repo }}"
+    option: enabled
+    value: "0"
+    no_extra_spaces: true
+    mode: '0644'
+  loop: "{{ disabled_repo_files.results }}"
+  loop_control:
+    label: "{{ item.item.repo }}"
+  when: item.stat.exists
+
+# ── Tästä eteenpäin dnf on turvallista ────────────────────────────────────────
+
+- name: Poista Microsoftin repo-paketti kun Sysmon ei ole käytössä
+  dnf:
+    name: packages-microsoft-prod
+    state: absent
+  when: not monitoring_enabled
+
 - name: Update packages
   dnf:
     name: "*"
     state: latest
     update_cache: true
+  when: package_management_enabled
 
 - name: Install basic packages
   dnf:
@@ -25,6 +85,7 @@
       - postgresql-server
       - python3-psycopg2
     state: present
+  when: package_management_enabled
 
 - name: Set hostname
   hostname:

@@ -1,47 +1,58 @@
-- name: Check if Microsoft GPG key is imported
-  ansible.builtin.command: rpm -q gpg-pubkey-be1229cf
-  register: ms_key_check
-  changed_when: false
-  failed_when: false
+---
+## roles/monitoring/tasks/main.yml
+## Sysmon for Linux. Ohjataan muuttujalla monitoring_enabled (defaults/main.yml).
+##
+## Rikkinäisen Microsoft-repon siivous on common-roolissa, ei täällä: se on
+## ajettava ENNEN common-roolin "Update packages" -taskia, ja monitoring ajetaan
+## deploy.yml:ssä viimeisenä.
 
-- name: Import Microsoft GPG key (rpm native, RHEL 10 / Sequoia -yhteensopiva)
-  ansible.builtin.command: rpm --import https://packages.microsoft.com/keys/microsoft.asc
-  when: ms_key_check.rc != 0
+# ── Sysmon käytössä ───────────────────────────────────────────────────────────
+# Vaatii ulospääsyn packages.microsoft.comiin. Ks. defaults/main.yml.
 
-- name: Install microsoft packages repository
-  dnf:
-    name: "https://packages.microsoft.com/config/rhel/{{ ansible_distribution_major_version }}/packages-microsoft-prod.rpm"
-    state: present
+- name: Sysmon
+  when: monitoring_enabled
+  block:
+    - name: Check if Microsoft GPG key is imported
+      ansible.builtin.command: rpm -q gpg-pubkey-be1229cf
+      register: ms_key_check
+      changed_when: false
+      failed_when: false
 
-- name: Install sysmonforlinux
-  dnf:
-    name: sysmonforlinux
-    state: present
+    - name: Import Microsoft GPG key (rpm native, RHEL 10 / Sequoia -yhteensopiva)
+      ansible.builtin.command: rpm --import https://packages.microsoft.com/keys/microsoft.asc
+      when: ms_key_check.rc != 0
 
-- name: Ensure sysmon directory exists
-  file:
-    path: /etc/sysmon
-    state: directory
-    mode: '0755'
+    - name: Install microsoft packages repository
+      ansible.builtin.dnf:
+        name: "https://packages.microsoft.com/config/rhel/{{ microsoft_repo_version }}/packages-microsoft-prod.rpm"
+        state: present
 
-- name: Install sysmon-config.xml to /etc/sysmon/sysmon-config.xml
-  template:
-    src: sysmon-config.xml.j2
-    dest: /etc/sysmon/sysmon-config.xml
-    owner: root
-    group: root
-    mode: '0644'
-  notify: Reload sysmon config
+    - name: Install sysmonforlinux
+      ansible.builtin.dnf:
+        name: sysmonforlinux
+        state: present
 
-- name: Check if sysmon service is registered
-  ansible.builtin.command: systemctl list-unit-files sysmon.service
-  register: sysmon_svc
-  changed_when: false
-  failed_when: false
+    - name: Ensure sysmon directory exists
+      ansible.builtin.file:
+        path: /etc/sysmon
+        state: directory
+        mode: '0755'
 
-- name: Install sysmon (first time only)
-  ansible.builtin.command: sysmon -accepteula -i /etc/sysmon/sysmon-config.xml
-  when: "'sysmon.service' not in sysmon_svc.stdout"
+    - name: Install sysmon-config.xml to /etc/sysmon/sysmon-config.xml
+      ansible.builtin.template:
+        src: sysmon-config.xml.j2
+        dest: /etc/sysmon/sysmon-config.xml
+        owner: root
+        group: root
+        mode: '0644'
+      notify: Reload sysmon config
 
+    - name: Check if sysmon service is registered
+      ansible.builtin.command: systemctl list-unit-files sysmon.service
+      register: sysmon_svc
+      changed_when: false
+      failed_when: false
 
-
+    - name: Install sysmon (first time only)
+      ansible.builtin.command: sysmon -accepteula -i /etc/sysmon/sysmon-config.xml
+      when: "'sysmon.service' not in sysmon_svc.stdout"
