@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  /etc/firewalld/policies/egress.xml
+  Hallinnoi: Ansible (roles/common/templates/egress-policy.xml.j2)
+
+  Rajoittaa palvelimen OMAA lähtevää liikennettä (host-originated traffic).
+  Tarkoitus: honeypottia ei voi käyttää hyökkäysalustana eteenpäin
+  (pivot / lateral movement / C2-yhteydet ulos).
+
+  Miksi policy object eikä iptables:
+    - Persistoituu natiivisti – iptables-moduulin säännöt katosivat rebootissa
+    - Ei taistele firewalld:n kanssa samoista nftables-tauluista
+    - Ei koske loopback-liikenteeseen, joten localhost-yhteydet (esim.
+      psql -h 127.0.0.1) toimivat – raaka OUTPUT policy DROP katkaisi ne
+
+  ingress-zone=HOST + egress-zone=ANY = palvelimelta ulos lähtevä liikenne.
+  target=REJECT = kaikki mitä alla ei sallita, torjutaan.
+  Established/related-paluuliikenteen firewalld hoitaa conntrackilla itse.
+
+  Sallitut palvelut: roles/common/defaults/main.yml → honeypot_egress_allow
+  Sallitut kohdeosoitteet: honeypot_egress_allow_hosts (Azuren alustaosoitteet,
+  joita VM-extensionien asennus tarvitsee – ks. defaults/main.yml)
+-->
+<policy target="REJECT">
+  <short>egress</short>
+  <description>Honeypot outbound-suodatus: vain nimenselvitys ja pakettirepot/Sentinel ulos.</description>
+  <ingress-zone name="HOST"/>
+  <egress-zone name="ANY"/>
+{%- for service in honeypot_egress_allow %}
+  <service name="{{ service }}"/>
+{%- endfor %}
+{%- for port in honeypot_egress_allow_ports | default([]) %}
+  <port port="{{ port.port }}" protocol="{{ port.proto }}"/>
+{%- endfor %}
+{%- for host in honeypot_egress_allow_hosts | default([]) %}
+  <!-- {{ host.comment }} -->
+  <rule family="ipv4">
+    <destination address="{{ host.address }}"/>
+    <accept/>
+  </rule>
+{%- endfor %}
+</policy>

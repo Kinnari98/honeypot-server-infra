@@ -26,7 +26,7 @@ vault_password_file
 # ─── Lokaalit muuttujat (oikeat IP:t, portit, avaimet) ──────────────────────
 # *.example-tiedostot ovat repossa mallina – oikeat tiedostot gitignored
 inventory/host_vars/*.yml
-!inventory/host_vars/*.example.yml
+!inventory/host_vars/*.yml.example
 inventory/*.local.yml
 inventory/local*.yml
 

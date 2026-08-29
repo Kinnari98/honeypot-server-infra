@@ -1,0 +1,27 @@
+---
+## roles/monitoring/defaults/main.yml
+## Sysmon for Linux -roolin oletusmuuttujat.
+
+# Sysmon on POIS KÄYTÖSTÄ oletuksena.
+#
+# Syy on ympäristö, ei mielipide: NSG-sääntö DenyInternetOut estää palvelimelta
+# ulospääsyn julkiseen internetiin, ja packages.microsoft.com on sen takana.
+# Pakettivarastoa ei voi hakea, joten sysmonforlinux ei ole asennettavissa.
+# Repoa ei kannata avata NSG:stä pelkän pakettivaraston takia – nykyinen
+# egress-rajoitus on honeypotin tärkein yksittäinen turvakontrolli.
+#
+# Kun tämä on false, rooli SIIVOAA rikkinäisen Microsoft-repon pois. Se on
+# välttämätöntä: jäljelle jäänyt tavoittamaton repo kaataa common-roolin
+# ensimmäisen taskin (dnf update vaatii kaikkien käytössä olevien repojen
+# metadatan), eli koko deployn.
+#
+# Sysmonin voi palauttaa kun joko a) Microsoft julkaisee RHEL 10 -paketit ja
+# repolle avataan pääsy, tai b) paketti tuodaan koneelle muuta reittiä.
+# Huomaa myös että Sysmon on osin päällekkäinen auditd:n kanssa
+# (ProcessCreate/execve, NetworkConnect/connect) – ks. ARCHITECTURE.md.
+monitoring_enabled: false
+
+# RHEL-versio jota Microsoftin repo-URL käyttää. Oletus on koneen oma versio,
+# mutta sen voi kiinnittää käsin jos halutulle versiolle ei ole pakettivarastoa
+# (esim. RHEL 10:llä voi joutua osoittamaan 9:ään).
+microsoft_repo_version: "{{ ansible_distribution_major_version }}"

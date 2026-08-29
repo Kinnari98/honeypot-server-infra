@@ -1,5 +1,8 @@
 ---
-- name: Restart SSH
+## Nimi on tarkoituksella "Restart sshd", ei "Restart SSH": common-rooli
+## määrittelee jo "Restart SSH", ja handler-nimiavaruus on play-tasoinen –
+## samanniminen handler kahdessa roolissa törmäisi keskenään.
+- name: Restart sshd
   service:
     name: sshd   # RHEL: sshd, Ubuntu: ssh
     state: restarted

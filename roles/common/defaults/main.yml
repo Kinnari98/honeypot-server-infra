@@ -1,0 +1,149 @@
+---
+## roles/common/defaults/main.yml
+## Common-roolin oletusmuuttujat. Voi ylikirjoittaa group_vars/host_vars-tasolla.
+
+# ── Outbound-suodatus (firewalld policy object) ───────────────────────────────
+# Palvelimelta ULOS sallittu liikenne. Kaikki muu torjutaan, jotta honeypottia
+# ei voi käyttää hyökkäysalustana eteenpäin.
+#
+#   dns   – nimenselvitys
+#   http  – pakettirepot (dnf)
+#   https – AMA → Log Analytics / Sentinel, sekä pakettirepot
+#
+# Nimet ovat firewalld-palveluita (firewall-cmd --get-services).
+honeypot_egress_allow:
+  - dns
+  - http
+  - https
+
+# Yksittäiset portit, jos jokin tarvittava ei ole valmiina firewalld-palveluna.
+# Esim: - { port: "123", proto: "udp" }   # NTP
+honeypot_egress_allow_ports: []
+
+# Kohdeosoitteet joihin sallitaan kaikki liikenne portista riippumatta.
+#
+# Azuren alustaosoitteet ovat pakollisia, jos VM:lle asennetaan extensioneja
+# (kuten AMA). WALinuxAgent hakee goal statea ja extension-artefakteja
+# wireserveriltä 168.63.129.16, ja osa liikenteestä kulkee portissa 32526 –
+# jota http/https-palvelut eivät kata. Ilman tätä poikkeusta extension-asennus
+# jää portaalissa "Transitioning"-tilaan ilman selvää virhettä.
+#
+# Poikkeus on kapea: nämä ovat kiinteitä, ei-reititettäviä alustaosoitteita,
+# ei yleinen portin avaus.
+honeypot_egress_allow_hosts:
+  - { address: "168.63.129.16",   comment: "Azure wireserver – WALinuxAgent, VM-extensionit" }
+  - { address: "169.254.169.254", comment: "Azure IMDS – instanssin metadata" }
+
+# ── Auditd ────────────────────────────────────────────────────────────────────
+# true  = säännöt lukitaan (-e 2). Hyökkääjä ei saa auditd:tä pois päältä ilman
+#         rebootia, mutta EIVÄTKÄ MYÖSKÄÄN uudet säännöt astu voimaan ilman
+#         rebootia. Tämä on tuotannon oletus.
+# false = säännöt ovat ladattavissa lennossa. Käytä kehityksessä kun iteroit
+#         audit.rules.j2:ta:  ansible-playbook ... -e audit_immutable=false
+audit_immutable: true
+
+# audisp-syslog-pluginin prioriteetti ja facility (/etc/audit/plugins.d/syslog.conf).
+#
+# Oletusarvoisesti auditd kirjoittaa LOG_USER-facilityyn, jossa se sekoittuu
+# kaikkeen muuhun logger-liikenteeseen. Oma facility mahdollistaa auditd-
+# volyymin säätämisen DCR:ssä erikseen, koskematta authpriv-kirjautumisiin.
+#
+# HUOM prioriteetti: audisp-syslog lähettää KAIKKI audit-tapahtumat tällä
+# prioriteetilla – myös onnistuneen root-eskalaation. Älä nosta tätä
+# Warning-tasolle, ja muista valita DCR:ssä vastaava taso (Info tai Debug),
+# muuten Syslog-taulu jää tyhjäksi.
+audit_syslog_priority: LOG_INFO
+audit_syslog_facility: LOG_LOCAL6
+
+# ── Käytöstä poistettavat dnf-repot ───────────────────────────────────────────
+# "dnf update" parametrilla name:"*" vaatii KAIKKIEN käytössä olevien repojen
+# metadatan. Yksikin tavoittamaton repo kaataa siis common-roolin ensimmäisen
+# taskin ja koko deployn – riippumatta siitä tarvitaanko repoa mihinkään.
+#
+# codeready-builder: RHEL 10.2:lle ei ole julkaistu RHUI-sisältöä polkuun
+# .../rhel10/rhui/$releasever/$arch/codeready-builder/os, joten repo on
+# tavoittamaton. Kyse ei ole verkosta – muut repot tulevat samalta palvelimelta
+# (rhui4-1.microsoft.com) ja toimivat. CodeReady Builder on kehityspakettien
+# repo, RHEL:llä oletuksena pois käytöstä, eikä honeypot tarvitse sitä.
+#
+# Poisto tehdään suoraan repotiedostoon, ei "dnf config-manager" -komennolla:
+# RHEL 10 käyttää DNF5:tä, jossa syntaksi on eri kuin DNF4:ssä.
+dnf_disabled_repos:
+  - file: /etc/yum.repos.d/rh-cloud-base.repo
+    repo: codeready-builder-for-rhel-10-rhui-rpms
+
+# ── Pakettien hallinta ────────────────────────────────────────────────────────
+# false = ohita sekä "Update packages" että "Install basic packages".
+#
+# Miksi tämä on olemassa: NSG-sääntö DenyInternetOut estää pääsyn Azuren
+# RHUI-endpointeihin (rhui4-1.microsoft.com → julkinen osoite), joten dnf ei
+# saa metadataa MISTÄÄN reposta. Silloin yksikään dnf-taski ei toimi, edes
+# state: present jo asennetuille paketeille, ja koko common-rooli jää jumiin.
+#
+# Turvakonfiguraation vieminen (auditd, firewalld, lokitus) ei kuitenkaan
+# oikeasti riipu pakettipäivityksistä. Tämä lippu erottaa ne toisistaan:
+#   ansible-playbook playbooks/deploy.yml -e package_management_enabled=false
+#
+# VAROITUS: ohittaminen on turvallista VAIN jos peruspaketit (firewalld, audit,
+# audispd-plugins, rsyslog, postgresql-server, python3-psycopg2) ovat jo
+# asennettuina. Uudella palvelimella deploy hajoaa myöhemmissä rooleissa.
+# Tämä on väliaikainen kiertotie, ei ratkaisu – ks. ARCHITECTURE.md.
+package_management_enabled: true
+
+# ── Auditd: poissuljetut binäärit ─────────────────────────────────────────────
+# Lokitusinfrastruktuuri suljetaan pois auditoinnista, koska se aiheuttaa
+# takaisinkytkennän:
+#
+#   rsyslog tallentaa journal-tilansa kirjoittamalla /var/lib/rsyslog/-tiedoston
+#   ja nimeämällä sen uudelleen → rename osuu file_deletion-sääntöön → auditd
+#   kirjaa tapahtuman → audisp-syslog lähettää sen syslogiin → rsyslog käsittelee
+#   sen → kirjoittaa tilatiedoston → uusi rename → uusi tapahtuma.
+#
+# Mitattu vaikutus tyhjäkäynnillä ennen korjausta: ~340 riviä sekunnissa eli
+# ~29 miljoonaa riviä ja ~15 GB vuorokaudessa – pelkkää itse tuotettua kohinaa,
+# joka olisi maksanut Sentinel-ingestiona kymmeniä euroja päivässä.
+#
+# Kompromissi: jos hyökkääjä kaappaa rsyslogd- tai auditd-prosessin, sen
+# toiminta jää kirjaamatta. Vaihtoehto olisi kuitenkin käyttökelvoton volyymi
+# ja puskurin ylivuodosta johtuva tapahtumien katoaminen, joka veisi näkyvyyden
+# kaikkeen muuhunkin.
+#
+# Polut on varmistettava kohdekoneelta (systemctl show -p ExecStart --value <yksikkö>).
+# Väärä polku ei kaada sääntöjen latausta – se vain ei sulje mitään pois.
+audit_exclude_exe:
+  - /usr/sbin/rsyslogd
+  - /usr/sbin/auditd
+  - /usr/lib/systemd/systemd-journald
+
+# Rajaa verkkosäännöt (socket/connect/accept4/bind) käyttäjälähtöiseen
+# toimintaan suodattamalla auid:n perusteella.
+#
+# Järjestelmädemonit – AMA, rsyslog, chronyd – ajavat auid=unset-tilassa ja
+# tuottavat jatkuvaa socket-kohinaa. AMA on erityistapaus: se avaa socketin
+# lähettääkseen audit-tapahtumia, mikä synnyttää lisää audit-tapahtumia.
+# Binäärien luettelointi audit_exclude_exe-listaan ei auta pitkään, koska
+# agentti päivittää itseään ja polut muuttuvat hiljaisesti.
+#
+# Hyökkääjä sen sijaan tulee sisään SSH:lla, jolloin auid on asetettu – ja se
+# säilyy sudon ja su:n läpi. Verkkotelemetria hyökkääjästä siis säilyy.
+#
+# Hinta: cronin tai systemd:n kautta ajettu hyökkääjän persistenssi ajetaan
+# auid=unset-tilassa, jolloin sen verkkoyhteydet jäävät kirjaamatta. Prosessin
+# käynnistys näkyy silti process_execution-säännössä, jota tämä ei koske.
+audit_network_user_only: true
+
+# Sama suodatin file_deletion-säännölle (unlink/rename), samasta syystä.
+#
+# Mitattu jakauma AMA:n asennuksen jälkeen: file_deletion tuotti 799 tapahtumaa
+# kahdessa minuutissa, joista 778 oli AMA:n omaa lokinkierrätystä
+# /var/opt/microsoft/azuremonitoragent/log/-hakemistossa – 97 % säännöstä ja
+# 53 % kaikista audit-tapahtumista. Takaisinkytkentä on sama kuin rsyslogilla:
+# agentti kirjoittaa lokia, siitä syntyy audit-tapahtuma, jonka agentti lähettää.
+#
+# Kerroin on merkittävä: yksi audit-tapahtuma tuottaa syslogiin noin kuusi riviä
+# (SYSCALL, PATH, CWD, PROCTITLE, EOE), joten yksi poistettu tapahtuma poistaa
+# kuusi riviä ingestiosta.
+#
+# Hinta: hyökkääjän cron-ajastettu jälkien siivous jää kirjaamatta. Vuorovaikut-
+# teinen siivous – se arvokas tapaus – näkyy, koska auid säilyy SSH-kirjautumisesta.
+audit_file_deletion_user_only: true
