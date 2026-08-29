@@ -2,20 +2,21 @@
 ## playbooks/deploy.yml
 ## Pääplaybookki – ajaa kaikki roolit honeypot-palvelimelle järjestyksessä.
 ##
-## Käyttö (lokaalisti):
-##   export ADMIN_SOURCE_IP="<oma-ip>"
-##   export ADMIN_SSH_PORT="2222"          # valinnainen, default 2222
-##   ansible-playbook -i inventory/hosts.yml playbooks/deploy.yml
+## Käyttö:
+##   ansible-playbook playbooks/deploy.yml
 ##
-## Käyttö (GitHub Actions):
-##   Ympäristömuuttujat asetetaan GitHub Secretseissä – katso .github/workflows/
+## Konfiguraatio tulee inventorysta (group_vars/all/ + host_vars/), ei
+## ympäristömuuttujista. Vault-salasana tarvitaan – ks. README kohta 2b.
+##
+## Kehityksessä auditd-sääntöjä iteroidessa:
+##   ansible-playbook playbooks/deploy.yml -e audit_immutable=false
 
 - name: Deploy honeypot server
   hosts: machines
   become: true         # sudo-oikeudet palvelimella
 
   roles:
-    ## Vaihe 1: Pohjakovennukset, auditd, UFW, SSH-hardening
+    ## Vaihe 1: Pohjakovennukset, auditd, firewalld, SSH-hardening
     ## Dokumentaatio: roles/common/tasks/main.yml
     - role: common
       tags: [common, base]

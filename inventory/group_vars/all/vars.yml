@@ -14,9 +14,12 @@ honeypot_open_ports:
 # Ks. roles/monitoring/defaults/main.yml.
 monitoring_enabled: false
 
+# HUOM: azure_*-muuttujia ei lue tällä hetkellä yksikään rooli – Azure-
+# provisiointi tehdään portaalista, ei Ansiblella. Ne ovat täällä dokumentaationa
+# ympäristöstä. Sama koskee log_analytics_*-arvoja (AMA tulee DCR:n kautta).
 azure_location: "swedencentral"
 azure_vm_size:  "Standard_B1ms"
-azure_vm_image: "Canonical:ubuntu-24_04-lts:server:latest"
+azure_vm_image: "RedHat:rhel-lvm:10-lvm-gen2:latest"  # palvelin on RHEL 10.2
 
 # ─── Arat arvot – oikeat arvot vault.yml:ssä (salattu) ────────────────────────
 # Nämä paljastaisivat honeypotin identiteetin tai Azure-ympäristön, joten

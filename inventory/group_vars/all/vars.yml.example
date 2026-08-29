@@ -10,9 +10,11 @@
 honeypot_open_ports:
   - { port: 22, proto: "tcp", name: "SSH" }
 
+# HUOM: azure_*-muuttujia ei lue yksikään rooli – Azure-provisiointi tehdään
+# portaalista, ei Ansiblella. Ne ovat täällä dokumentaationa ympäristöstä.
 azure_location: ""            # esim. swedencentral
 azure_vm_size:  "Standard_B1ms"
-azure_vm_image: "Canonical:ubuntu-24_04-lts:server:latest"
+azure_vm_image: "RedHat:rhel-lvm:10-lvm-gen2:latest"  # roolit olettavat RHEL:n
 
 # ─── Arat arvot – arvot omassa vaultatussa vault.yml:ssä ──────────────────────
 lure_hostname:               "{{ vault_lure_hostname }}"

@@ -1,9 +1,11 @@
+## playbooks/harden.yml
+## KESKENERÄINEN: roles/defender/tasks/main.yml on tyhjä, joten tämä playbook
+## ei tee vielä mitään. Ks. ToDo.md kohta 5 (Defender best-practiset).
+
 - name: Harden honeypot server
   hosts: machines
   become: true         # sudo-oikeudet palvelimella
 
   roles:
-    ## Vaihe 1: Pohjakovennukset, auditd, UFW, SSH-hardening
-    ## Dokumentaatio: roles/common/tasks/main.yml
     - role: defender
       tags: [defender, harden]
