@@ -13,3 +13,6 @@
   service:
     name: auditd
     state: restarted
+
+- name: Reload firewalld
+  command: firewall-cmd --reload

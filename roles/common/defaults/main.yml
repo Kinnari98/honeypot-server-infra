@@ -37,3 +37,34 @@ dnf_disabled_repos:
 # Tämä on väliaikainen kiertotie, ei ratkaisu – ks. ARCHITECTURE.md.
 package_management_enabled: true
 
+# ── Outbound-suodatus (firewalld policy object) ───────────────────────────────
+# Palvelimelta ULOS sallittu liikenne. Kaikki muu torjutaan, jotta honeypottia
+# ei voi käyttää hyökkäysalustana eteenpäin.
+#
+#   dns   – nimenselvitys
+#   http  – pakettirepot (dnf)
+#   https – AMA → Log Analytics / Sentinel, sekä pakettirepot
+#
+# Nimet ovat firewalld-palveluita (firewall-cmd --get-services).
+honeypot_egress_allow:
+  - dns
+  - http
+  - https
+
+# Yksittäiset portit, jos jokin tarvittava ei ole valmiina firewalld-palveluna.
+# Esim: - { port: "123", proto: "udp" }   # NTP
+honeypot_egress_allow_ports: []
+
+# Kohdeosoitteet joihin sallitaan kaikki liikenne portista riippumatta.
+#
+# Azuren alustaosoitteet ovat pakollisia, jos VM:lle asennetaan extensioneja
+# (kuten AMA). WALinuxAgent hakee goal statea ja extension-artefakteja
+# wireserveriltä 168.63.129.16, ja osa liikenteestä kulkee portissa 32526 –
+# jota http/https-palvelut eivät kata. Ilman tätä poikkeusta extension-asennus
+# jää portaalissa "Transitioning"-tilaan ilman selvää virhettä.
+#
+# Poikkeus on kapea: nämä ovat kiinteitä, ei-reititettäviä alustaosoitteita,
+# ei yleinen portin avaus.
+honeypot_egress_allow_hosts:
+  - { address: "168.63.129.16",   comment: "Azure wireserver – WALinuxAgent, VM-extensionit" }
+  - { address: "169.254.169.254", comment: "Azure IMDS – instanssin metadata" }

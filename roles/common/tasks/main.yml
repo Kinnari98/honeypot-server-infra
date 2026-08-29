@@ -123,38 +123,33 @@
 
 # Outbound-suodatus: salli vain Sentinel (443), pakettirepot (80/443), DNS (53)
 # Kaikki muu ulospäin suuntautuva liikenne blokataan.
+#
+# Toteutettu firewalld policy objectina, EI iptables-moduulilla. Syyt:
+#   1) iptables-moduulin säännöt elävät vain ajonaikaisessa taulussa – ilman
+#      iptables-services-pakettia ne katosivat rebootissa ja outbound-lukitus
+#      lakkasi hiljaisesti olemasta voimassa
+#   2) raaka "OUTPUT policy DROP" katkaisi myös loopback-liikenteen, koska
+#      lo-liitännälle ei ollut ACCEPT-sääntöä – mm. psql -h 127.0.0.1 hajosi
+#   3) firewalld ja suorat iptables-säännöt kilpailevat samoista nftables-
+#      tauluista RHEL 9:stä eteenpäin (RHEL 10 on nftables-only)
+# Policy object persistoituu itsestään ja hoitaa conntrackin.
 
-- name: Firewalld – salli ulospäin ESTABLISHED-yhteydet
-  iptables:
-    chain: OUTPUT
-    ctstate: ESTABLISHED,RELATED
-    jump: ACCEPT
+- name: Firewalld – varmista policies-hakemisto
+  file:
+    path: /etc/firewalld/policies
+    state: directory
+    owner: root
+    group: root
+    mode: '0750'
 
-- name: Firewalld – salli ulospäin DNS
-  iptables:
-    chain: OUTPUT
-    protocol: udp
-    destination_port: "53"
-    jump: ACCEPT
-
-- name: Firewalld – salli ulospäin HTTPS (Sentinel + repot)
-  iptables:
-    chain: OUTPUT
-    protocol: tcp
-    destination_port: "443"
-    jump: ACCEPT
-
-- name: Firewalld – salli ulospäin HTTP (pakettirepot)
-  iptables:
-    chain: OUTPUT
-    protocol: tcp
-    destination_port: "80"
-    jump: ACCEPT
-
-- name: Firewalld – blokkaa kaikki muu ulospäin
-  iptables:
-    chain: OUTPUT
-    policy: DROP
+- name: Firewalld – outbound-policy (vain sallittu liikenne ulos)
+  template:
+    src: egress-policy.xml.j2
+    dest: /etc/firewalld/policies/egress.xml
+    owner: root
+    group: root
+    mode: '0644'
+  notify: Reload firewalld
 
 # ── SSH ───────────────────────────────────────────────────────────────────────
 # Portti pysyy 22:ssa – pääsynhallinta hoidetaan Azure NSG:llä.
