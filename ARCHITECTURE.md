@@ -134,6 +134,16 @@ Idea on että ylläpitäjien tunnukset **näkyvät** `/etc/passwd`:ssä ja tekev
 
 `validate: sshd -t -f %s` estää rikkinäisen konfiguraation kirjoittamisen. Se ei kuitenkaan estä lukkiutumista: syntaksi voi olla oikein ja silti sulkea sinut ulos. Ansible yhdistää `azureuser`-tunnuksella, joka ei ole `admin_users`-listalla, joten korjausreitti säilyy.
 
+**Hallintayhteys kulkee tunnelin läpi.** `ansible_host` osoittaa WireGuard-osoitteeseen (`10.50.50.1`), ei julkiseen IP:hen. Näin NSG:hen ei tarvita yhtään sisääntulevaa SSH-sääntöä internetistä: hallintaliikenne näkyy verkolle pelkkänä UDP 51820:na.
+
+Kääntöpuoli on että **Ansible-pääsy riippuu tunnelista**. Jos WireGuard kaatuu, hallintaa ei ole. Palautusreitit järjestyksessä:
+
+1. Nosta tunneli uudelleen (yleensä riittää)
+2. Azure Serial Console tai Run Command – toimii NSG:stä ja sshd:stä riippumatta
+3. Väliaikainen NSG-sääntö portille 22 hallintakoneen osoitteelle, ja `ansible_host` julkiseen IP:hen
+
+Vaihtoehto 2 on varsinainen break-glass: se ei kulje verkkopinon läpi lainkaan, joten se toimii myös silloin kun palomuuri tai sshd on rikki.
+
 > **Deployn järjestys on olennainen.** WireGuard on saatava pystyyn ja todennettua ENNEN kuin tämä rajoitus astuu voimaan – muuten ylläpitäjien oma pääsy katkeaa siihen asti kunnes VPN toimii.
 
 > **`Match`-lohko on oltava viimeisenä.** sshd:ssä kaikki `Match`-lohkon jälkeen tuleva kuuluu siihen lohkoon. `high-interaction`-roolin `Banner`- ja `PrintMotd`-taskit käyttävät siksi `insertbefore: '^Match '` -suojausta: tyhjällä palvelimella `lineinfile` lisäisi puuttuvan rivin tiedoston loppuun eli rajoituksen sisään, jolloin banneri näkyisi vain ylläpitäjille eikä lainkaan hyökkääjälle.
