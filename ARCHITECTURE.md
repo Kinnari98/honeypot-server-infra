@@ -239,6 +239,14 @@ Seurauksia joita ei näe koodista:
 
 **Sisäänpäin (inbound):** kaikki estetty oletuksena (drop-zone). Vain `honeypot_open_ports`-listassa määritellyt portit sallitaan.
 
+Lista on **auktoritatiivinen**: `common`-rooli sekä avaa listan portit että sulkee kaikki muut. Ilman sovitusta Ansiblen `firewalld`-moduuli vain lisää portteja eikä koskaan poista, jolloin lista olisi pelkkä lisäysjono ja palvelimen todellinen tila ajautuisi hiljaa erilleen reposta. Näin oli käynytkin: drop-zonessa oli auki 23, 80, 443, 445, 3306 ja 5900 ilman että mikään kuunteli niissä eikä repo tiennyt niistä mitään.
+
+Ne suljettiin, kahdesta syystä. **Persoonan johdonmukaisuus:** palvelin esittää PostgreSQL-kantapalvelinta, joten avoin MySQL-portti 3306 on suora ristiriita – samoin SMB ja VNC Linux-kantapalvelimella. Hyökkääjä lukee porttiskannauksesta persoonan, ja epäjohdonmukaisuus kertoo hänelle enemmän kuin meille. **Ei signaalia:** portti jonka takana ei kuuntele mitään vastaa `connection refused` eikä tuota yhtään vuorovaikutusdataa – vain skannauskohinaa lokeihin.
+
+Jos porttia halutaan käyttää houkuttimena, sen taakse on laitettava jotain joka vastaa. Pelkkä avoin portti ei ole houkutin.
+
+Sovitustaskia edeltää `assert`, joka keskeyttää ajon jos portti 22 puuttuu listalta – muuten sovitus katkaisisi hallintayhteyden.
+
 **Ulospäin (outbound):** firewalld **policy object** `egress` (`/etc/firewalld/policies/egress.xml`, template `roles/common/templates/egress-policy.xml.j2`):
 
 - `ingress-zone=HOST`, `egress-zone=ANY` → koskee palvelimen omaa lähtevää liikennettä

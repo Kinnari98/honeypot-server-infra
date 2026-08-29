@@ -326,6 +326,9 @@ ansible machines -m shell -a "firewall-cmd --list-all" --become
 # Tarkista outbound-policy (pitää säilyä myös rebootin yli)
 ansible machines -m shell -a "firewall-cmd --info-policy=egress" --become
 
+# Tarkista että avoimet portit vastaavat honeypot_open_ports-listaa
+ansible machines -m shell -a "firewall-cmd --list-ports --zone=drop" --become
+
 # Tarkista käynnissä olevat palvelut
 ansible machines -m shell -a "systemctl list-units --state=failed" --become
 

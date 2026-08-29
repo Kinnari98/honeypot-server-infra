@@ -112,6 +112,22 @@
   register: zone_result
   changed_when: "'already set' not in zone_result.stdout"
 
+# honeypot_open_ports on AUKTORITATIIVINEN: se kertoo mitkä portit ovat auki,
+# ei pelkästään mitä lisätään. Ilman alla olevaa sovitustaskia firewalld-moduuli
+# vain lisää portteja eikä koskaan poista niitä, jolloin käsin avatut portit
+# jäävät palvelimelle eikä repo tiedä niistä mitään. Näin kävikin: drop-zonessa
+# oli auki 23, 80, 443, 445, 3306 ja 5900 ilman että mikään kuunteli niissä.
+
+- name: Firewalld – varmista ettei hallintayhteyttä suljeta
+  assert:
+    that:
+      - honeypot_open_ports | length > 0
+      - honeypot_open_ports | selectattr('port', 'equalto', 22) | list | length > 0
+    fail_msg: >-
+      honeypot_open_ports ei sisällä porttia 22. Sovitustaski sulkisi SSH:n ja
+      katkaisisi hallintayhteyden – ajo keskeytetään.
+    quiet: true
+
 - name: Firewalld – salli honeypot-portit sisään
   firewalld:
     zone: drop
@@ -120,6 +136,27 @@
     permanent: true
     immediate: true
   loop: "{{ honeypot_open_ports }}"
+
+- name: Firewalld – hae drop-zonen nykyiset portit
+  command: firewall-cmd --zone=drop --list-ports
+  register: drop_zone_ports
+  changed_when: false
+
+# Ajetaan vasta sallimisen JÄLKEEN, jotta missään vaiheessa ei jää hetkeä
+# jolloin deklaroitu portti olisi kiinni.
+- name: Firewalld – sulje portit joita honeypot_open_ports ei deklaroi
+  firewalld:
+    zone: drop
+    port: "{{ item }}"
+    state: disabled
+    permanent: true
+    immediate: true
+  loop: "{{ drop_zone_ports.stdout.split() | difference(honeypot_declared_ports) }}"
+  vars:
+    honeypot_declared_ports: >-
+      {{ honeypot_open_ports | map(attribute='port') | map('string')
+         | zip(honeypot_open_ports | map(attribute='proto'))
+         | map('join', '/') | list }}
 
 # Outbound-suodatus: salli vain Sentinel (443), pakettirepot (80/443), DNS (53)
 # Kaikki muu ulospäin suuntautuva liikenne blokataan.
