@@ -21,7 +21,18 @@ postgresql_hba_entries:
 # Honeypot-periaate: maksimoi näkyvyys. Lokitetaan kaikki yhteydet ja kyselyt,
 # jotta hyökkääjän toiminta päätyy lokeihin → Sentinel.
 # Kaikki nämä ovat reload-tason parametreja (ei vaadi restartia).
+#
+# log_destination on ratkaiseva: pelkällä stderr:llä lokit jäävät tiedostoihin
+# /var/lib/pgsql/data/log/ eivätkä päädy syslog-ketjuun → AMA → Sentinel.
+# Kantatelemetria olisi siis tallessa vain palvelimella, jonne hyökkääjällä on
+# pääsy. "syslog" lisättynä lokit menevät molempiin.
+#
+# VAATII MUUTOKSEN AZUREN PUOLELLA: DCR:n syslog-keräykseen on lisättävä
+# local0-facility, muuten lokit pysähtyvät rsyslogiin. Ks. README.
 postgresql_settings:
+  - { name: log_destination,    value: "stderr,syslog" }
+  - { name: syslog_facility,    value: "LOCAL0" }
+  - { name: syslog_ident,       value: "postgres" }
   - { name: log_connections,    value: "on" }
   - { name: log_disconnections, value: "on" }
   - { name: log_statement,      value: "all" }
