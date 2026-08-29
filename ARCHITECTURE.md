@@ -111,6 +111,33 @@ Suodatus on rakennettu siten, että Azuren oma kohina (WALinuxAgent, gc_worker, 
 
 > **Päällekkäisyys auditd:n kanssa:** Sysmonin `NetworkConnect` ja auditd:n `socket`/`connect`/`accept`/`bind` -säännöt tuottavat saman verkkotelemetrian kahteen kertaan, samoin `ProcessCreate` ja `execve`. Standard_B1ms (1 vCPU / 2 GB) yhdistettynä `-b 16384` + `-f 1` -asetuksiin tarkoittaa, että puskurin täyttyessä tapahtumia katoaa hiljaisesti – ja Sentinel-ingestio maksaa kahdesta kopiosta. Päällekkäisyyden purkaminen on avoin päätös.
 
+### `wireguard` – ylläpitäjien VPN
+
+Asentaa `wireguard-tools`-paketin (RHEL 10:n omissa repoissa, ei EPEL-riippuvuutta), templatoi `/etc/wireguard/wg0.conf` oikeuksilla `0600` ja käynnistää `wg-quick@wg0`. Ajetaan omana playbookinaan (`playbooks/wireguard.yml`), ei osana `deploy.yml`:ää.
+
+Kaikki avaimet ja osoitteet ovat vaultissa (`wireguard_*`). Template ohittaa peerin jos sen julkinen avain on tyhjä, joten toisen ylläpitäjän voi lisätä myöhemmin ilman templaten muokkausta.
+
+Portti avataan `honeypot_open_ports`-listan kautta kuten kaikki muutkin – roolissa ei ole omaa firewalld-taskia.
+
+### Ylläpitäjien pääsyn rajaus
+
+`common`-rooli lisää `sshd_config`-tiedoston loppuun `Match`-lohkon, joka poistaa `admin_users`-listan tunnuksilta autentikoinnin kaikkialta muualta kuin WireGuard-subnetistä:
+
+```
+Match User <admin_users> Address !<wireguard_network>
+    PubkeyAuthentication no
+    PasswordAuthentication no
+    KbdInteractiveAuthentication no
+```
+
+Idea on että ylläpitäjien tunnukset **näkyvät** `/etc/passwd`:ssä ja tekevät palvelimesta uskottavamman, mutta eivät ole hyökkääjän käytettävissä. Houkutintunnuksiin (`mimu`, `pela`, `psql*`) rajoitus ei vaikuta – ne jäävät auki julkiseen porttiin 22, koska ne ovat se reitti jota pitkin hyökkääjän on tarkoituskin tulla.
+
+`validate: sshd -t -f %s` estää rikkinäisen konfiguraation kirjoittamisen. Se ei kuitenkaan estä lukkiutumista: syntaksi voi olla oikein ja silti sulkea sinut ulos. Ansible yhdistää `azureuser`-tunnuksella, joka ei ole `admin_users`-listalla, joten korjausreitti säilyy.
+
+> **Deployn järjestys on olennainen.** WireGuard on saatava pystyyn ja todennettua ENNEN kuin tämä rajoitus astuu voimaan – muuten ylläpitäjien oma pääsy katkeaa siihen asti kunnes VPN toimii.
+
+> **`Match`-lohko on oltava viimeisenä.** sshd:ssä kaikki `Match`-lohkon jälkeen tuleva kuuluu siihen lohkoon. `high-interaction`-roolin `Banner`- ja `PrintMotd`-taskit käyttävät siksi `insertbefore: '^Match '` -suojausta: tyhjällä palvelimella `lineinfile` lisäisi puuttuvan rivin tiedoston loppuun eli rajoituksen sisään, jolloin banneri näkyisi vain ylläpitäjille eikä lainkaan hyökkääjälle.
+
 ### `admins` – oikeat ylläpitäjät
 
 Ansible-vaultilla salattu `tasks/main.yml`, joka luo oikeat ylläpitotunnukset ja SSH-julkiavaimet. Ajetaan erikseen (`playbooks/admins.yml`), ei osana `deploy.yml`:ää, jotta houkutin- ja ylläpitotunnukset pysyvät erillään.
@@ -168,7 +195,7 @@ Suodatus on kahdessa kerroksessa, ja **Azure NSG on niistä tärkeämpi**. Hyök
 
 | Prioriteetti | Sääntö | Suunta | Vaikutus |
 |---|---|---|---|
-| 220 | `AllowWireguardInbound` – UDP 51820 | sisään | WireGuardille varattu; roolia ei ole vielä toteutettu |
+| 220 | `AllowWireguardInbound` – UDP 51820 | sisään | Ylläpitäjien VPN (`wireguard`-rooli) |
 | 4000 | `AllowAzureMonitorOut` – TCP 443 → `AzureMonitor` | ulos | **Telemetriapolku Sentineliin** |
 | 4010 | `DenyInternetOut` – kaikki → `Internet` | ulos | Estää ulospääsyn julkiseen internetiin |
 | 4020/4030 | SSH sallittu kahdesta ylläpitäjän IP:stä | sisään | Hallintapääsy |

@@ -59,7 +59,7 @@ tekee joko honeypotista hyödyttömän (ei dataa) tai vaarallisen (ei kontrollia
 7. Houkutintunnuksille (`mimu`, `pela`, `psqladmin`) asetetaan heikot salasanat vaultista
 8. `PasswordAuthentication yes` sshd:hen
 9. NSG:ssä portti 22 avataan internetiin – nyt se on rajattu kahteen ylläpitäjän IP:hen, joten pelkkä sshd-muutos ei riitä
-10. Ylläpitäjien oma pääsy varmistetaan ennen tätä: WireGuard toimintaan, tai admin-tunnukset rajataan erikseen
+10. Ylläpitäjien oma pääsy varmistetaan ennen tätä: `playbooks/wireguard.yml` ajettu ja tunneli todennettu, jotta `admin_users`-rajoitus ei sulje sinua ulos
 
 **Avaamisen jälkeen:**
 
@@ -236,6 +236,17 @@ Muista ajaa lopuksi ilman lippua ja bootata palvelin, jotta tuotannon lukitus pa
 ```bash
 ansible-playbook playbooks/admins.yml --ask-vault-pass
 ```
+
+### Ylläpitäjien VPN (ajetaan erikseen)
+
+```bash
+ansible-playbook playbooks/wireguard.yml --ask-vault-pass
+```
+
+> **Aja tämä ja todenna VPN-yhteys ENNEN `deploy.yml`:n ajamista.** `common`-rooli
+> rajaa `admin_users`-tunnusten kirjautumisen WireGuard-subnettiin, joten oma
+> pääsysi katkeaa jos tunneli ei ole pystyssä. Ansible pääsee yhä sisään
+> `azureuser`-tunnuksella, joten tilanne on korjattavissa – mutta turha kierros.
 
 ---
 
@@ -436,6 +447,7 @@ Auditd-tapahtumat päätyvät `Syslog`-tauluun, ja sääntöjen `-k`-tagi näkyy
 ├── playbooks/
 │   ├── deploy.yml                       # Pääplaybook (common, high-interaction, users, psql, crontab, monitoring)
 │   ├── admins.yml                       # Oikeat ylläpitäjät (vaultattu admins-rooli)
+│   ├── wireguard.yml                    # Ylläpitäjien VPN (erillinen ajo)
 │   └── harden.yml                       # KESKENERÄINEN: defender-rooli on tyhjä
 └── roles/
     ├── common/                          # Peruskovennukset: paketit, firewalld, SSH, auditd
@@ -471,6 +483,11 @@ Auditd-tapahtumat päätyvät `Syslog`-tauluun, ja sääntöjen `-k`-tagi näkyy
     │   ├── handlers/main.yml
     │   └── templates/
     │       └── sysmon-config.xml.j2
+    ├── wireguard/                       # Ylläpitäjien VPN-yhteys
+    │   ├── tasks/main.yml
+    │   ├── handlers/main.yml
+    │   └── templates/
+    │       └── wg0.conf.j2
     ├── defender/                        # KESKENERÄINEN – tasks/main.yml on tyhjä
     │   └── tasks/main.yml
     └── admins/                          # Oikeat ylläpitäjät – ansible-vaultilla salattu
