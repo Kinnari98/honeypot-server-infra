@@ -4,7 +4,7 @@
     dest: /etc/motd
     owner: root
     group: root
-    mode: '0755'
+    mode: '0644'   # staattinen teksti – suoritusbitti olisi poikkeama
   become: true
 
 - name: Deploy script
@@ -22,7 +22,7 @@
     dest: /etc/issue.net
     owner: root
     group: root
-    mode: '0755'
+    mode: '0644'   # staattinen teksti – suoritusbitti olisi poikkeama
   become: true
 
 - name: Delete content from motd.d

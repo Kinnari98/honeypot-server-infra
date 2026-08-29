@@ -1,0 +1,14 @@
+---
+## roles/high-interaction/defaults/main.yml
+## Houkuttimen (lure) sisältömuuttujat. Voi ylikirjoittaa group_vars/host_vars-tasolla.
+##
+## Nämä ovat MOTD:ssä näkyviä "tuotantopalvelimen" tietoja. Ne eivät ole
+## salaisuuksia, joten ne ovat selkokielisinä täällä – toisin kuin lure_hostname,
+## joka paljastaisi honeypotin identiteetin ja on siksi vaultissa.
+
+# ── MOTD:n uskottavuustiedot ──────────────────────────────────────────────────
+# PIDÄ NÄMÄ AJAN TASALLA. Menneisyyteen jäänyt "seuraava huoltoikkuna" on
+# ensimmäinen asia, josta tarkkaavainen hyökkääjä huomaa ettei palvelinta
+# oikeasti ylläpidetä. Tarkista näiden arvot aina kun deployaat.
+lure_next_maintenance: "September 20th, 2026"
+lure_last_backup: "August 27th, 2026"

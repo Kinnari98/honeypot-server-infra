@@ -1,13 +1,23 @@
+{#
+  /etc/motd – post-login banneri
+  Hallinnoi: Ansible (roles/high-interaction/templates/motd.j2)
+
+  Laatikon leveys on 60 merkkiä: "#" + 2 väliä + 56 merkkiä sisältöä + "#".
+  Kaikki sisältörivit ljust(56):llä, jotta oikea reuna pysyy suorassa
+  muuttujien pituudesta riippumatta.
+
+  Päivämäärät: roles/high-interaction/defaults/main.yml
+-#}
 ############################################################
-#  You are logged in to {{ lure_hostname.ljust(29) }}      #
-#  PRODUCTION | sales database                             #
-#                                                          #
-#  Unauthorized access is strictly prohibited.             #
-#  All activity is monitored for security purposes.        #
-#                                                          #
-#                                                          #
-#  Next scheduled maintenance is January 19th, 2026        #
-#                                                          #
-#  Backup status: successful on April 2nd, 2026            #
-#  Backup can be found at: /var/backups/sales-db           #
+#  {{ ("You are logged in to " ~ lure_hostname).ljust(56) }}#
+#  {{ "PRODUCTION | sales database".ljust(56) }}#
+#  {{ "".ljust(56) }}#
+#  {{ "Unauthorized access is strictly prohibited.".ljust(56) }}#
+#  {{ "All activity is monitored for security purposes.".ljust(56) }}#
+#  {{ "".ljust(56) }}#
+#  {{ "".ljust(56) }}#
+#  {{ ("Next scheduled maintenance is " ~ lure_next_maintenance).ljust(56) }}#
+#  {{ "".ljust(56) }}#
+#  {{ ("Backup status: successful on " ~ lure_last_backup).ljust(56) }}#
+#  {{ "Backup can be found at: /var/backups/sales-db".ljust(56) }}#
 ############################################################
