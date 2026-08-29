@@ -1,17 +1,26 @@
 - name: Create backup directory
   file:
-    path: /var/backups/sales-db
+    path: "{{ backup_dir }}"
     state: directory
     owner: postgres
     group: postgres
-    mode: '0755'
+    mode: '0755'   # tarkoituksella luettavissa – dumppi on osa houkutinta
 
+- name: Deploy PostgreSQL backup script
+  template:
+    src: backup_postgresql.sh
+    dest: /usr/local/bin/backup_postgresql.sh
+    owner: postgres
+    group: postgres
+    mode: '0750'
+
+# Ajetaan päivittäin, ei viikoittain: MOTD lupaa hoidettua tuotantopalvelinta,
+# ja harvakseltaan päivittyvä backup-hakemisto on ristiriita jonka hyökkääjä
+# huomaa. Aiempi weekday: "0" rajasi ajon sunnuntaiksi.
 - name: Create cronjob for psql backup
   cron:
     name: "PostgreSQL backup"
     minute: "0"
     hour: "2"
-    month: "*"
-    weekday: "0"
     user: postgres
-    job: "pg_dump -U postgres sales > /var/backups/sales-db/sales_$(date +\\%Y\\%m\\%d).sql"
+    job: "/usr/local/bin/backup_postgresql.sh"

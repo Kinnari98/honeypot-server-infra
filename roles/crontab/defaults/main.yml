@@ -1,0 +1,11 @@
+---
+## roles/crontab/defaults/main.yml
+## Varmuuskopioinnin oletusmuuttujat. Voi ylikirjoittaa group_vars/host_vars-tasolla.
+
+backup_dir: /var/backups/sales-db
+backup_db: sales
+
+# Kuinka monta vuorokautta dumppeja säilytetään. Vaikuttaa myös houkuttimeen:
+# hyökkääjän löytämä hakemisto näyttää uskottavalta kun siellä on historiaa,
+# muttei loputtomasti.
+backup_retention_days: 14
