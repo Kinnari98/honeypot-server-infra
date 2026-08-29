@@ -168,7 +168,7 @@
     src: audit.rules.j2
     dest: /etc/audit/rules.d/honeypot.rules
     mode: '0640'
-  notify: Restart auditd
+  notify: Reload audit rules
 
 - name: Etsi audisp syslog-pluginin polku
   stat:
@@ -185,11 +185,32 @@
     line: 'active = yes'
   loop: "{{ audisp_paths.results }}"
   when: item.stat.exists
-  notify: Restart auditd
+  notify: Reload auditd plugins
+
+# Ohjaa auditd omaan syslog-facilityynsä (oletus local6). Ilman tätä audit-
+# tapahtumat menevät LOG_USER-facilityyn ja sekoittuvat kaikkeen muuhun
+# logger-liikenteeseen.
+#
+# Syy on kustannushallinta, ei siisteys: auditd on ylivoimaisesti suurin
+# volyymin lähde (execve + connect jokaisesta prosessista). Omassa
+# facilityssään sitä voi säätää tai pudottaa DCR:stä koskematta authpriv-
+# kirjautumisiin tai cron-persistenssiin, jotka ovat halpoja ja arvokkaita.
+#
+# audisp-syslog args = <prioriteetti> <facility>
+- name: Aseta audisp-syslogin prioriteetti ja facility
+  lineinfile:
+    path: "{{ item.item }}"
+    regexp: '^args'
+    line: "args = {{ audit_syslog_priority }} {{ audit_syslog_facility }}"
+  loop: "{{ audisp_paths.results }}"
+  when: item.stat.exists
+  notify: Reload auditd plugins
 
 ## AMA-HUOMIO:
 ## Azure Monitor Agent asennetaan automaattisesti kun DCR liitetään VM:ään.
-## Syslog-keräys konfiguroidaan DCR:ssä.
+## Syslog-keräys konfiguroidaan DCR:ssä – kerättävät facilityt on lueteltu
+## README:n lokiketju-osiossa. Auditd tulee tästä roolista facilityyn joka on
+## määritelty muuttujassa audit_syslog_facility (ks. defaults/main.yml).
 ## Lokiketju: auditd → audisp-syslog → syslog → AMA → Log Analytics → Sentinel
 
 - name: Set timezone to UTC

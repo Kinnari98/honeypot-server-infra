@@ -2,6 +2,59 @@
 ## roles/common/defaults/main.yml
 ## Common-roolin oletusmuuttujat. Voi ylikirjoittaa group_vars/host_vars-tasolla.
 
+# ── Outbound-suodatus (firewalld policy object) ───────────────────────────────
+# Palvelimelta ULOS sallittu liikenne. Kaikki muu torjutaan, jotta honeypottia
+# ei voi käyttää hyökkäysalustana eteenpäin.
+#
+#   dns   – nimenselvitys
+#   http  – pakettirepot (dnf)
+#   https – AMA → Log Analytics / Sentinel, sekä pakettirepot
+#
+# Nimet ovat firewalld-palveluita (firewall-cmd --get-services).
+honeypot_egress_allow:
+  - dns
+  - http
+  - https
+
+# Yksittäiset portit, jos jokin tarvittava ei ole valmiina firewalld-palveluna.
+# Esim: - { port: "123", proto: "udp" }   # NTP
+honeypot_egress_allow_ports: []
+
+# Kohdeosoitteet joihin sallitaan kaikki liikenne portista riippumatta.
+#
+# Azuren alustaosoitteet ovat pakollisia, jos VM:lle asennetaan extensioneja
+# (kuten AMA). WALinuxAgent hakee goal statea ja extension-artefakteja
+# wireserveriltä 168.63.129.16, ja osa liikenteestä kulkee portissa 32526 –
+# jota http/https-palvelut eivät kata. Ilman tätä poikkeusta extension-asennus
+# jää portaalissa "Transitioning"-tilaan ilman selvää virhettä.
+#
+# Poikkeus on kapea: nämä ovat kiinteitä, ei-reititettäviä alustaosoitteita,
+# ei yleinen portin avaus.
+honeypot_egress_allow_hosts:
+  - { address: "168.63.129.16",   comment: "Azure wireserver – WALinuxAgent, VM-extensionit" }
+  - { address: "169.254.169.254", comment: "Azure IMDS – instanssin metadata" }
+
+# ── Auditd ────────────────────────────────────────────────────────────────────
+# true  = säännöt lukitaan (-e 2). Hyökkääjä ei saa auditd:tä pois päältä ilman
+#         rebootia, mutta EIVÄTKÄ MYÖSKÄÄN uudet säännöt astu voimaan ilman
+#         rebootia. Tämä on tuotannon oletus.
+# false = säännöt ovat ladattavissa lennossa. Käytä kehityksessä kun iteroit
+#         audit.rules.j2:ta:  ansible-playbook ... -e audit_immutable=false
+audit_immutable: true
+
+# audisp-syslog-pluginin prioriteetti ja facility (/etc/audit/plugins.d/syslog.conf).
+#
+# Oletusarvoisesti auditd kirjoittaa LOG_USER-facilityyn, jossa se sekoittuu
+# kaikkeen muuhun logger-liikenteeseen. Oma facility mahdollistaa auditd-
+# volyymin säätämisen DCR:ssä erikseen, koskematta authpriv-kirjautumisiin.
+#
+# HUOM prioriteetti: audisp-syslog lähettää KAIKKI audit-tapahtumat tällä
+# prioriteetilla – myös onnistuneen root-eskalaation. Älä nosta tätä
+# Warning-tasolle, ja muista valita DCR:ssä vastaava taso (Info tai Debug),
+# muuten Syslog-taulu jää tyhjäksi.
+audit_syslog_priority: LOG_INFO
+audit_syslog_facility: LOG_LOCAL6
+
 # ── Käytöstä poistettavat dnf-repot ───────────────────────────────────────────
 # "dnf update" parametrilla name:"*" vaatii KAIKKIEN käytössä olevien repojen
 # metadatan. Yksikin tavoittamaton repo kaataa siis common-roolin ensimmäisen
@@ -37,34 +90,27 @@ dnf_disabled_repos:
 # Tämä on väliaikainen kiertotie, ei ratkaisu – ks. ARCHITECTURE.md.
 package_management_enabled: true
 
-# ── Outbound-suodatus (firewalld policy object) ───────────────────────────────
-# Palvelimelta ULOS sallittu liikenne. Kaikki muu torjutaan, jotta honeypottia
-# ei voi käyttää hyökkäysalustana eteenpäin.
+# ── Auditd: poissuljetut binäärit ─────────────────────────────────────────────
+# Lokitusinfrastruktuuri suljetaan pois auditoinnista, koska se aiheuttaa
+# takaisinkytkennän:
 #
-#   dns   – nimenselvitys
-#   http  – pakettirepot (dnf)
-#   https – AMA → Log Analytics / Sentinel, sekä pakettirepot
+#   rsyslog tallentaa journal-tilansa kirjoittamalla /var/lib/rsyslog/-tiedoston
+#   ja nimeämällä sen uudelleen → rename osuu file_deletion-sääntöön → auditd
+#   kirjaa tapahtuman → audisp-syslog lähettää sen syslogiin → rsyslog käsittelee
+#   sen → kirjoittaa tilatiedoston → uusi rename → uusi tapahtuma.
 #
-# Nimet ovat firewalld-palveluita (firewall-cmd --get-services).
-honeypot_egress_allow:
-  - dns
-  - http
-  - https
-
-# Yksittäiset portit, jos jokin tarvittava ei ole valmiina firewalld-palveluna.
-# Esim: - { port: "123", proto: "udp" }   # NTP
-honeypot_egress_allow_ports: []
-
-# Kohdeosoitteet joihin sallitaan kaikki liikenne portista riippumatta.
+# Mitattu vaikutus tyhjäkäynnillä ennen korjausta: ~340 riviä sekunnissa eli
+# ~29 miljoonaa riviä ja ~15 GB vuorokaudessa – pelkkää itse tuotettua kohinaa,
+# joka olisi maksanut Sentinel-ingestiona kymmeniä euroja päivässä.
 #
-# Azuren alustaosoitteet ovat pakollisia, jos VM:lle asennetaan extensioneja
-# (kuten AMA). WALinuxAgent hakee goal statea ja extension-artefakteja
-# wireserveriltä 168.63.129.16, ja osa liikenteestä kulkee portissa 32526 –
-# jota http/https-palvelut eivät kata. Ilman tätä poikkeusta extension-asennus
-# jää portaalissa "Transitioning"-tilaan ilman selvää virhettä.
+# Kompromissi: jos hyökkääjä kaappaa rsyslogd- tai auditd-prosessin, sen
+# toiminta jää kirjaamatta. Vaihtoehto olisi kuitenkin käyttökelvoton volyymi
+# ja puskurin ylivuodosta johtuva tapahtumien katoaminen, joka veisi näkyvyyden
+# kaikkeen muuhunkin.
 #
-# Poikkeus on kapea: nämä ovat kiinteitä, ei-reititettäviä alustaosoitteita,
-# ei yleinen portin avaus.
-honeypot_egress_allow_hosts:
-  - { address: "168.63.129.16",   comment: "Azure wireserver – WALinuxAgent, VM-extensionit" }
-  - { address: "169.254.169.254", comment: "Azure IMDS – instanssin metadata" }
+# Polut on varmistettava kohdekoneelta (systemctl show -p ExecStart --value <yksikkö>).
+# Väärä polku ei kaada sääntöjen latausta – se vain ei sulje mitään pois.
+audit_exclude_exe:
+  - /usr/sbin/rsyslogd
+  - /usr/sbin/auditd
+  - /usr/lib/systemd/systemd-journald

@@ -9,10 +9,44 @@
     name: rsyslog
     state: restarted
 
-- name: Restart auditd
-  service:
-    name: auditd
-    state: restarted
-
 - name: Reload firewalld
   command: firewall-cmd --reload
+
+## Auditd-sääntöjen lataus.
+##
+## HUOM: auditd:tä EI voi käynnistää uudelleen systemd:llä RHEL:llä –
+## auditd.service on RefuseManualStop=yes, joten "systemctl restart auditd"
+## hylätään ("Operation refused, unit auditd.service may be requested by
+## dependency only"). Oikea tapa ladata rules.d/-säännöt on augenrules.
+##
+## Molemmat handlerit kuuntelevat samaa aihetta (listen), jotta varoitus
+## ajetaan samalla notifylla kuin itse lataus.
+- name: Load audit rules
+  listen: Reload audit rules
+  ansible.builtin.command: /usr/sbin/augenrules --load
+  register: augenrules_result
+  # Immutable-tilassa (-e 2) lataus epäonnistuu odotetusti: kernel ei salli
+  # sääntömuutoksia ennen rebootia. Se ei ole virhe, vaan haluttu tila.
+  failed_when: >-
+    augenrules_result.rc != 0 and
+    not (augenrules_result.stderr is search('Operation not permitted|rules are locked'))
+
+- name: Warn that audit rules require a reboot
+  listen: Reload audit rules
+  ansible.builtin.debug:
+    msg: >-
+      Audit on immutable-tilassa (-e 2). Uudet säännöt on kirjoitettu tiedostoon
+      /etc/audit/rules.d/honeypot.rules, mutta ne astuvat voimaan vasta
+      rebootissa. Kehityksessä voit ohittaa lukituksen ajamalla playbookin
+      lisäargumentilla:  -e audit_immutable=false
+  when: augenrules_result.rc != 0
+
+## Plugin-konfiguraation (esim. audisp-syslogin facility) muutos vaatii
+## auditd:lle SIGHUPin – augenrules --load lataa vain säännöt, ei plugineja.
+##
+## reload on sallittu vaikka restart ei ole: auditd.service estää manuaalisen
+## pysäytyksen (RefuseManualStop=yes), mutta ExecReload on määritelty.
+- name: Reload auditd plugins
+  ansible.builtin.systemd:
+    name: auditd
+    state: reloaded
